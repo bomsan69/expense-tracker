@@ -105,4 +105,8 @@ None.
 
 None.
 
+### Gate finding fixed during this phase
+
+The `perl -ne 'exit 1 if /parseFloat|toFixed/' lib/money.ts` guard initially failed — not because the code used either function, but because `lib/money.ts`'s own top-of-file comment *named* `parseFloat`/`toFixed` while explaining that the file avoids them. The guard is a blunt text grep with no comment-awareness, so naming the forbidden functions anywhere in the file trips it. Fixed by rewording the comment to describe the rule without spelling out the literal function names; the guard itself was left unchanged.
+
 ---

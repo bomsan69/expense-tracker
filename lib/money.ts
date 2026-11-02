@@ -1,4 +1,4 @@
-// Integer cents only; never parseFloat/toFixed for money math (SPEC.md §5).
+// Integer cents only; no float-based parsing or rounding for money math (SPEC.md §5).
 
 export function formatMoney(cents: number): string {
   const sign = cents < 0 ? "-" : "";
