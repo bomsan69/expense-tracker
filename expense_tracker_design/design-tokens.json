@@ -1,0 +1,75 @@
+{
+  "meta": {
+    "name": "Expense Tracker",
+    "version": "1.0",
+    "status": "design proposal"
+  },
+  "colors": {
+    "primary": "#1F2937",
+    "secondary": "#F3F4F6",
+    "accent": "#2563EB",
+    "background": "#FFFFFF",
+    "surface": "#FFFFFF",
+    "foreground": "#111827",
+    "mutedForeground": "#6B7280",
+    "border": "#E5E7EB",
+    "destructive": "#B91C1C",
+    "destructiveBackground": "#FEF2F2"
+  },
+  "font": {
+    "family": "Inter",
+    "source": "Google Fonts",
+    "sizes": {
+      "pageTitle": "24px",
+      "section": "20px",
+      "cardTitle": "18px",
+      "body": "16px",
+      "secondary": "14px",
+      "caption": "12px",
+      "button": "16px"
+    },
+    "lineHeights": {
+      "pageTitle": "32px",
+      "section": "28px",
+      "cardTitle": "26px",
+      "body": "24px",
+      "secondary": "20px",
+      "caption": "16px",
+      "button": "24px"
+    },
+    "weights": {
+      "regular": 400,
+      "semibold": 600,
+      "bold": 700
+    }
+  },
+  "spacing": {
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "6": "24px",
+    "8": "32px"
+  },
+  "radius": {
+    "small": "6px",
+    "control": "10px",
+    "card": "14px",
+    "full": "9999px"
+  },
+  "shadow": {
+    "card": "0 2px 9px rgba(16,24,40,.025)"
+  },
+  "layout": {
+    "mobileBase": 390,
+    "mobileHeight": 844,
+    "minWidth": 320,
+    "gutter": "16px",
+    "minTouch": "44px"
+  },
+  "icons": {
+    "library": "lucide-react",
+    "defaultSize": "20px",
+    "strokeWidth": 2
+  }
+}
