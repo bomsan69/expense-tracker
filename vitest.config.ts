@@ -19,7 +19,9 @@ export default defineConfig({
           name: "jsdom",
           environment: "jsdom",
           setupFiles: ["./vitest.setup.ts"],
-          include: ["components/**/*.test.{ts,tsx}", "app/**/*.test.{ts,tsx}"],
+          // .tsx tests render components/pages; .ts tests are server-side
+          // logic (actions, queries) and belong to the "node" project below.
+          include: ["components/**/*.test.tsx", "app/**/*.test.tsx"],
           exclude: EXCLUDE,
         },
       },
@@ -28,7 +30,7 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "node",
-          include: ["db/**/*.test.ts", "lib/**/*.test.ts"],
+          include: ["db/**/*.test.ts", "lib/**/*.test.ts", "app/**/*.test.ts"],
           exclude: EXCLUDE,
           env: {
             DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",

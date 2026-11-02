@@ -2,12 +2,22 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses, users } from "@/db/schema";
+import { hashPassword } from "@/lib/auth/password";
 
 export async function createTestUser(): Promise<{ id: number; email: string }> {
   const email = `test-${randomUUID()}@example.com`;
   const [result] = await db
     .insert(users)
     .values({ email, passwordHash: "unused-in-tests" });
+  return { id: result.insertId, email };
+}
+
+export async function createTestUserWithPassword(
+  password: string,
+): Promise<{ id: number; email: string }> {
+  const email = `test-${randomUUID()}@example.com`;
+  const passwordHash = await hashPassword(password);
+  const [result] = await db.insert(users).values({ email, passwordHash });
   return { id: result.insertId, email };
 }
 

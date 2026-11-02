@@ -3,6 +3,9 @@ import { z } from "zod";
 export const INVALID_CREDENTIALS_ERROR = "Invalid email or password.";
 export const PASSWORD_POLICY_ERROR =
   "Use at least 10 characters with a letter and a number.";
+// Not in SPEC.md §8.1's table (which has no row for a wrong *current*
+// password specifically); this is the server-verified check from §7 SUP-03.
+export const WRONG_CURRENT_PASSWORD_ERROR = "Your current password is incorrect.";
 
 export const loginSchema = z.object({
   email: z.string().trim().email({ message: "Enter a valid email address." }),

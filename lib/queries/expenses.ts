@@ -80,6 +80,26 @@ export async function sumExpenses(
   return Number.parseInt(row?.value ?? "0", 10);
 }
 
+export async function findDuplicateExpense(
+  userId: number,
+  spentOn: string,
+  merchant: string,
+  amountMinor: number,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: expenses.id })
+    .from(expenses)
+    .where(
+      and(
+        eq(expenses.userId, userId),
+        eq(expenses.spentOn, spentOn),
+        eq(expenses.merchant, merchant),
+        eq(expenses.amountMinor, amountMinor),
+      ),
+    );
+  return row !== undefined;
+}
+
 export async function getExpenseById(
   userId: number,
   id: number,

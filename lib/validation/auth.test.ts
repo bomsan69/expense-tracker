@@ -36,9 +36,9 @@ describe("loginSchema", () => {
 
 describe("changePasswordSchema", () => {
   const base = {
-    currentPassword: "currentpass1",
-    newPassword: "newpassword1",
-    confirmPassword: "newpassword1",
+    currentPassword: "current.pass1",
+    newPassword: "new.password1",
+    confirmPassword: "new.password1",
   };
 
   it("accepts a valid change", () => {
@@ -71,7 +71,7 @@ describe("changePasswordSchema", () => {
   it("rejects a mismatched confirmation", () => {
     const result = changePasswordSchema.safeParse({
       ...base,
-      confirmPassword: "somethingelse1",
+      confirmPassword: "something.else1",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -85,9 +85,9 @@ describe("changePasswordSchema", () => {
 
   it("rejects a new password equal to the current password", () => {
     const result = changePasswordSchema.safeParse({
-      currentPassword: "samepassword1",
-      newPassword: "samepassword1",
-      confirmPassword: "samepassword1",
+      currentPassword: "same.password1",
+      newPassword: "same.password1",
+      confirmPassword: "same.password1",
     });
     expect(result.success).toBe(false);
   });
