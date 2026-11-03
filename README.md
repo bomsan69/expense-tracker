@@ -19,7 +19,7 @@ npm run dev                 # http://localhost:3000
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | MySQL connection string for the app, e.g. `mysql://root:<password>@127.0.0.1:3306/expense_tracker` |
+| `DATABASE_URL` | MySQL connection string for the app, e.g. `mysql://root:<password>@127.0.0.1:3307/expense_tracker` |
 | `TEST_DATABASE_URL` | Separate database used by the Playwright E2E suite, e.g. `...expense_tracker_test` |
 | `SESSION_SECRET` | ≥32 bytes, signs the session JWT (HS256) |
 | `ENCRYPTION_KEY` | 32-byte key, base64-encoded, encrypts the stored AI API key (AES-256-GCM) |
