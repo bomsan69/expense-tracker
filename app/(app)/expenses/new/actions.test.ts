@@ -37,14 +37,14 @@ vi.mock("next/headers", () => ({
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => mockRedirect(url),
 }));
-vi.mock("@anthropic-ai/sdk", () => {
-  class MockAnthropic {
+vi.mock("openai", () => {
+  class MockOpenAI {
     static AuthenticationError = MockAuthenticationError;
     static PermissionDeniedError = MockPermissionDeniedError;
     static APIConnectionTimeoutError = MockAPIConnectionTimeoutError;
-    messages = { create: mockCreate };
+    chat = { completions: { create: mockCreate } };
   }
-  return { default: MockAnthropic };
+  return { default: MockOpenAI };
 });
 
 const { createExpenseAction, parseReceiptAction } = await import(
@@ -63,7 +63,7 @@ function formData(fields: Record<string, FormDataEntryValue>): FormData {
 }
 
 function receiptTextResponse(payload: unknown) {
-  return { content: [{ type: "text", text: JSON.stringify(payload) }] };
+  return { choices: [{ message: { content: JSON.stringify(payload) } }] };
 }
 
 beforeEach(async () => {
@@ -164,8 +164,8 @@ describe("parseReceiptAction", () => {
 
   it("parses items, flags duplicates, and never auto-saves", async () => {
     await saveAiSettings(userId, {
-      aiModel: "claude-sonnet-5",
-      aiApiKeyCiphertext: encryptApiKey("sk-ant-key"),
+      aiModel: "gpt-4o-mini",
+      aiApiKeyCiphertext: encryptApiKey("sk-key"),
       aiApiKeyLast4: "-key",
     });
     const existing = await createExpense(userId, {
@@ -217,8 +217,8 @@ describe("parseReceiptAction", () => {
 
   it("passes through the AI timeout message", async () => {
     await saveAiSettings(userId, {
-      aiModel: "claude-sonnet-5",
-      aiApiKeyCiphertext: encryptApiKey("sk-ant-key"),
+      aiModel: "gpt-4o-mini",
+      aiApiKeyCiphertext: encryptApiKey("sk-key"),
       aiApiKeyLast4: "-key",
     });
     mockCreate.mockRejectedValue(new MockAPIConnectionTimeoutError("timeout"));
@@ -235,8 +235,8 @@ describe("parseReceiptAction", () => {
 
   it("never echoes the decrypted API key on an auth failure", async () => {
     await saveAiSettings(userId, {
-      aiModel: "claude-sonnet-5",
-      aiApiKeyCiphertext: encryptApiKey("sk-ant-should-never-appear"),
+      aiModel: "gpt-4o-mini",
+      aiApiKeyCiphertext: encryptApiKey("sk-should-never-appear"),
       aiApiKeyLast4: "pear",
     });
     mockCreate.mockRejectedValue(new MockAuthenticationError("unauthorized"));
@@ -249,7 +249,7 @@ describe("parseReceiptAction", () => {
       ok: false,
       error: "Your AI API key was rejected. Check it in Settings.",
     });
-    expect(JSON.stringify(result)).not.toContain("sk-ant-should-never-appear");
+    expect(JSON.stringify(result)).not.toContain("sk-should-never-appear");
   });
 
   it("redirects to /login when unauthenticated", async () => {

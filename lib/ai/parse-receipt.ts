@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { z } from "zod";
 import { isValidIsoDate } from "@/lib/dates";
 import { parseAmountToMinor } from "@/lib/money";
@@ -81,55 +81,54 @@ export interface ParseReceiptParams {
   apiKey: string;
 }
 
+// Single AI provider: OpenAI only — no provider abstraction layer (SPEC.md §4 D5).
 export async function parseReceipt(
   params: ParseReceiptParams,
 ): Promise<ParseReceiptResult> {
-  // The Anthropic vision API itself only accepts jpeg/png/webp; HEIC passes
+  // The OpenAI vision API itself only accepts jpeg/png/webp; HEIC passes
   // our own upload validation (SPEC.md §8.1) but can't be sent to the provider.
   if (params.mimeType === "image/heic") {
     return failure("unsupported_format");
   }
 
-  const client = new Anthropic({ apiKey: params.apiKey });
+  const client = new OpenAI({ apiKey: params.apiKey });
 
   let responseText: string;
   try {
-    const response = await client.messages.create(
+    const response = await client.chat.completions.create(
       {
         model: params.model,
-        max_tokens: 2048,
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "user",
             content: [
+              { type: "text", text: RECEIPT_PROMPT },
               {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: params.mimeType,
-                  data: params.imageBase64,
+                type: "image_url",
+                image_url: {
+                  url: `data:${params.mimeType};base64,${params.imageBase64}`,
                 },
               },
-              { type: "text", text: RECEIPT_PROMPT },
             ],
           },
         ],
       },
       { timeout: RECEIPT_TIMEOUT_MS },
     );
-    const textBlock = response.content.find((block) => block.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
+    const content = response.choices[0]?.message.content;
+    if (!content) {
       return failure("no_items");
     }
-    responseText = textBlock.text;
+    responseText = content;
   } catch (error) {
     if (
-      error instanceof Anthropic.AuthenticationError ||
-      error instanceof Anthropic.PermissionDeniedError
+      error instanceof OpenAI.AuthenticationError ||
+      error instanceof OpenAI.PermissionDeniedError
     ) {
       return failure("auth");
     }
-    if (error instanceof Anthropic.APIConnectionTimeoutError) {
+    if (error instanceof OpenAI.APIConnectionTimeoutError) {
       return failure("timeout");
     }
     return failure("no_items");

@@ -79,7 +79,7 @@ SCR-05 Settings ──Log Out──> SCR-01
 | Auth | **Custom session: signed JWT (HS256) in an httpOnly cookie** | `jose`; no NextAuth (see D1) |
 | Password hashing | **argon2id** (`@node-rs/argon2`) | bcrypt cost ≥ 12 acceptable fallback |
 | Key encryption | **AES-256-GCM** via node `crypto` | For the stored AI API key (D5) |
-| AI | **Anthropic API** (`@anthropic-ai/sdk`) | Vision receipt parsing, BYOK (D5) |
+| AI | **OpenAI API** (`openai`) | Vision receipt parsing, BYOK (D5) |
 | Unit/integration tests | **Vitest** + Testing Library | `*.test.ts(x)` beside the unit |
 | E2E tests | **Playwright** | `tests/e2e/`, mobile viewport 390×844 |
 | Lint / format | **ESLint** (`next/core-web-vitals`, `--max-warnings=0`) + **Prettier** | |
@@ -113,7 +113,7 @@ The source deck marks 9 items `CONFIRM REQUIRED` / `PROPOSED`, and `expense_trac
 | **D2** | Expense data: currency, timezone, required fields, notes, receipt storage | **Currency USD**, display `en-US` (`$1,248.50`). Money stored as **integer minor units (cents)** in `BIGINT`. Dates are **calendar dates with no time or timezone** (MySQL `DATE`, ISO `YYYY-MM-DD`); all date math is calendar-day arithmetic, server-local-free. **Required:** date, category, merchant, amount > 0. **Optional:** notes (max 500 chars). **Receipt images are never stored** (see D6). |
 | **D3** | Date interpretation: rolling 7 days vs today − 7 inclusive | **`From = today − 7 calendar days`, `To = today`, both inclusive → 8 distinct dates.** This matches the literal wording on deck slide 6. Filtering is `spent_on BETWEEN from AND to` inclusive. |
 | **D4** | Receipt parsing: one expense per receipt or per line item? Tax/tip? Duplicates? | **One proposed expense per line item.** Tax, tip, subtotal, and total lines are **excluded** from the proposed items (the receipt's own total is shown for reconciliation only). A proposed item whose (date, merchant, amount) matches an existing expense is **flagged as a possible duplicate but not blocked** — the user decides during SUP-01 review. |
-| **D5** | AI provider/model/key: BYOK vs server key, encryption | **Bring-your-own-key (BYOK), single provider: Anthropic.** The user enters a model string (default `claude-sonnet-5`) and their own API key on SCR-05. The key is encrypted **AES-256-GCM** at rest with `ENCRYPTION_KEY`, decrypted server-side only at call time, and returned to the client **only** as a masked last-4 (`••••••••1234`). Never logged, never echoed in an error. No multi-provider abstraction layer. |
+| **D5** | AI provider/model/key: BYOK vs server key, encryption | **Bring-your-own-key (BYOK), single provider: OpenAI.** The user enters a model string (default `gpt-4o-mini`) and their own API key on SCR-05, with a **Verify** button that checks both against the provider (via `models.retrieve`) without saving. The key is encrypted **AES-256-GCM** at rest with `ENCRYPTION_KEY`, decrypted server-side only at call time, and returned to the client **only** as a masked last-4 (`••••••••1234`). Never logged, never echoed in an error. No multi-provider abstraction layer. |
 | **D6** | Batch save: atomic vs partial? Image retention? | **Atomic.** `Confirm & Save All` writes every reviewed item in **one DB transaction**; any failure rolls the whole batch back and the review screen keeps the user's edits. **Receipt images are processed in memory only** — never written to disk, never stored in a table. Only the original filename is shown during the session, and it is not persisted. |
 | **D7** | Statistics: current + previous 5 months, or 6 completed months? Chart library? | **Current month + the previous 5 = 6 buckets including the current (partial) month**. The six month labels are **computed at runtime from the current month**, never hardcoded; the deck's `Jun…Nov` axis is simply what that computation yields for a November 2026 "today". Pie chart covers the **previous full calendar month**. Chart library: **Recharts**. |
 | **D8** | Categories: delete/merge, ordering, rename semantics | **No delete, no merge** (deck SUP-02: "Delete — not requested; omit unless confirmed"). Create and rename only. Ordering is **ascending by label**, case-insensitive. **Category `id` is stable across renames**, so historical expenses follow the new label. Names are unique per user, case-insensitively. |
@@ -323,10 +323,10 @@ Each screen lists Purpose · Elements (numbered as in the deck) · Behaviour · 
 ### SCR-05 · Settings — `/settings`
 
 **Purpose:** configure credentials, categories, and the AI integration.
-**Elements:** section **ACCOUNT** → `01` *Change Password ›*; section **CATEGORIES** → `02` *Manage Categories ›*; section **AI CONFIGURATION** → `03` **AI Model** (text, default `claude-sonnet-5`), `04` **API Key** (masked entry); `05` **Save Settings**; `06` **Log Out**.
-**Behaviour:** `01` → SUP-03, `02` → SUP-02. Save validates the configuration: a non-empty model string, and an API key that either is left untouched (keeps the stored value) or is replaced wholesale. **Log Out** clears the session cookie → SCR-01.
-**Security:** the stored key is rendered **only** as a masked last-4 (`••••••••1234`); the raw key is never returned to the client, never logged, never placed in an error message. Stored AES-256-GCM encrypted server-side (D5).
-**States:** invalid AI config → inline error; save success → confirmation; key never shown unmasked by default.
+**Elements:** section **ACCOUNT** → `01` *Change Password ›*; section **CATEGORIES** → `02` *Manage Categories ›*; section **AI CONFIGURATION** → `03` **AI Model** (text, default `gpt-4o-mini`), `04` **API Key** (masked entry), `05` **Verify** (checks `03`/`04` against the provider without saving); `06` **Save Settings**; `07` **Log Out**.
+**Behaviour:** `01` → SUP-03, `02` → SUP-02. `05` Verify validates the typed fields and calls the AI provider read-only (no persistence either way); if the key field is left blank, it checks the already-stored key instead. Save validates the configuration: a non-empty model string, and an API key that either is left untouched (keeps the stored value) or is replaced wholesale. **Log Out** clears the session cookie → SCR-01.
+**Security:** the stored key is rendered **only** as a masked last-4 (`••••••••1234`); the raw key is never returned to the client, never logged, never placed in an error message, whether saving or verifying. Stored AES-256-GCM encrypted server-side (D5).
+**States:** invalid AI config → inline error; verify success/failure → inline confirmation or error, independent of save; save success → confirmation; key never shown unmasked by default.
 
 ### SCR-06 · Statistics — `/stats`
 
@@ -427,7 +427,7 @@ These three must be reproducible in the running app and are asserted by E2E test
 2. **Route protection:** `middleware.ts` guards every path except `/login` and static assets — **and** every server action independently re-verifies the session. Middleware alone is not authorization.
 3. **Tenant isolation:** every `select` / `update` / `delete` on `expenses` and `categories`, **including aggregates and chart queries**, carries `eq(table.user_id, session.userId)`. `user_id` comes only from the verified session — never from a body, query param, header, or client state. Another user's record responds **not found**.
 4. **Passwords:** argon2id (or bcrypt cost ≥ 12), constant-time verify, never logged, never returned, never stored in plaintext.
-5. **AI API key:** AES-256-GCM encrypted at rest with `ENCRYPTION_KEY`; decrypted server-side only at call time; exposed to the client only as a masked last-4; never logged, never in an error message, transmitted only to the Anthropic endpoint.
+5. **AI API key:** AES-256-GCM encrypted at rest with `ENCRYPTION_KEY`; decrypted server-side only at call time; exposed to the client only as a masked last-4; never logged, never in an error message, transmitted only to the OpenAI endpoint — including during Verify.
 6. **Secrets:** server-side `process.env` only. Nothing secret in source, in a client component, in a committed file, in a log, or in an error. `.env*` gitignored except `.env.example` (names, empty values).
 7. **SQL:** drizzle query builder with bound parameters only. No string-interpolated SQL. `sql.raw` forbidden outside migrations.
 8. **Receipt data:** images processed in memory, never written to disk or a table. User expense data is sent to no third party other than the configured AI provider, and only during an explicit receipt-parse action initiated by the user.
@@ -456,7 +456,7 @@ app/
   (app)/expenses/[id]/actions.ts    # update + delete
   (app)/stats/page.tsx              # SCR-06
   (app)/settings/page.tsx           # SCR-05
-  (app)/settings/actions.ts         # AI config + logout
+  (app)/settings/actions.ts         # AI config + verify + logout
   (app)/settings/categories/page.tsx    # SUP-02
   (app)/settings/categories/actions.ts
   (app)/settings/password/page.tsx      # SUP-03
@@ -479,7 +479,7 @@ lib/
   money.ts  dates.ts
   queries/expenses.ts  queries/categories.ts  queries/stats.ts  queries/settings.ts
   validation/expense.ts  validation/auth.ts  validation/category.ts  validation/settings.ts
-  ai/parse-receipt.ts
+  ai/parse-receipt.ts  ai/verify-ai-settings.ts
 middleware.ts
 tests/e2e/
 drizzle.config.ts

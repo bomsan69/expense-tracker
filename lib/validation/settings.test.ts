@@ -3,7 +3,7 @@ import { aiApiKeySchema, aiModelSchema, aiSettingsSchema } from "./settings";
 
 describe("aiModelSchema", () => {
   it("accepts a valid model string", () => {
-    expect(aiModelSchema.safeParse("claude-sonnet-5").success).toBe(true);
+    expect(aiModelSchema.safeParse("gpt-4o-mini").success).toBe(true);
   });
 
   it("rejects a blank model", () => {
@@ -23,7 +23,7 @@ describe("aiApiKeySchema", () => {
   });
 
   it("accepts a real key", () => {
-    expect(aiApiKeySchema.safeParse("sk-ant-real-key").success).toBe(true);
+    expect(aiApiKeySchema.safeParse("sk-real-key").success).toBe(true);
   });
 
   it("rejects a whitespace-only value", () => {
@@ -40,7 +40,7 @@ describe("aiApiKeySchema", () => {
 describe("aiSettingsSchema", () => {
   it("accepts a model with a blank key", () => {
     expect(
-      aiSettingsSchema.safeParse({ aiModel: "claude-sonnet-5", aiApiKey: "" })
+      aiSettingsSchema.safeParse({ aiModel: "gpt-4o-mini", aiApiKey: "" })
         .success,
     ).toBe(true);
   });

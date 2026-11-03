@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { saveAiSettingsAction } from "@/app/(app)/settings/actions";
+import { saveAiSettingsAction, verifyAiSettingsAction } from "@/app/(app)/settings/actions";
 import { FormField } from "@/components/forms/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,14 @@ export function AiSettingsForm({ initialModel, maskedKey }: AiSettingsFormProps)
     ActionResult | undefined,
     FormData
   >(saveAiSettingsAction, undefined);
+  const [verifyState, verifyFormAction, isVerifying] = useActionState<
+    ActionResult | undefined,
+    FormData
+  >(verifyAiSettingsAction, undefined);
   const error = state && !state.ok ? state.error : undefined;
   const success = state?.ok === true;
+  const verifyError = verifyState && !verifyState.ok ? verifyState.error : undefined;
+  const verifySuccess = verifyState?.ok === true;
 
   const [model, setModel] = useState(initialModel);
   // Starts blank: blank means "keep the stored key" (SPEC.md §7 SCR-05).
@@ -45,6 +51,16 @@ export function AiSettingsForm({ initialModel, maskedKey }: AiSettingsFormProps)
       {success && (
         <p role="status" className="text-sm text-foreground">
           Settings saved.
+        </p>
+      )}
+      {verifyError && (
+        <p role="alert" className="text-sm text-destructive">
+          {verifyError}
+        </p>
+      )}
+      {verifySuccess && (
+        <p role="status" className="text-sm text-foreground">
+          Connection verified.
         </p>
       )}
 
@@ -74,13 +90,24 @@ export function AiSettingsForm({ initialModel, maskedKey }: AiSettingsFormProps)
         logs.
       </p>
 
-      <Button
-        type="submit"
-        disabled={isPending}
-        className="min-h-12 w-full rounded-md bg-accent font-semibold text-white"
-      >
-        {isPending ? "Saving…" : "Save Settings"}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          type="submit"
+          formAction={verifyFormAction}
+          variant="outline"
+          disabled={isPending || isVerifying}
+          className="min-h-12 flex-1"
+        >
+          {isVerifying ? "Verifying…" : "Verify"}
+        </Button>
+        <Button
+          type="submit"
+          disabled={isPending || isVerifying}
+          className="min-h-12 flex-1 rounded-md bg-accent font-semibold text-white"
+        >
+          {isPending ? "Saving…" : "Save Settings"}
+        </Button>
+      </div>
     </form>
   );
 }

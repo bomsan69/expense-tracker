@@ -17,14 +17,14 @@ const {
   };
 });
 
-vi.mock("@anthropic-ai/sdk", () => {
-  class MockAnthropic {
+vi.mock("openai", () => {
+  class MockOpenAI {
     static AuthenticationError = MockAuthenticationError;
     static PermissionDeniedError = MockPermissionDeniedError;
     static APIConnectionTimeoutError = MockAPIConnectionTimeoutError;
-    messages = { create: mockCreate };
+    chat = { completions: { create: mockCreate } };
   }
-  return { default: MockAnthropic };
+  return { default: MockOpenAI };
 });
 
 const { parseReceipt } = await import("./parse-receipt");
@@ -34,7 +34,7 @@ beforeEach(() => {
 });
 
 function textResponse(payload: unknown) {
-  return { content: [{ type: "text", text: JSON.stringify(payload) }] };
+  return { choices: [{ message: { content: JSON.stringify(payload) } }] };
 }
 
 describe("parseReceipt", () => {
@@ -42,7 +42,7 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/heic",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(result).toEqual({
@@ -65,7 +65,7 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(result).toEqual({
@@ -90,7 +90,7 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(result).toEqual({
@@ -104,7 +104,7 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(result).toEqual({
@@ -119,15 +119,15 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
-      apiKey: "sk.ant.should.never.appear",
+      model: "gpt-4o-mini",
+      apiKey: "sk-should-never-appear",
     });
     expect(result).toEqual({
       ok: false,
       error: "auth",
       message: expect.stringContaining("rejected"),
     });
-    expect(JSON.stringify(result)).not.toContain("sk.ant.should.never.appear");
+    expect(JSON.stringify(result)).not.toContain("sk-should-never-appear");
   });
 
   it("maps a permission-denied error to the auth failure", async () => {
@@ -135,7 +135,7 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(result.ok).toBe(false);
@@ -147,7 +147,7 @@ describe("parseReceipt", () => {
     const result = await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(result).toEqual({
@@ -162,7 +162,7 @@ describe("parseReceipt", () => {
     await parseReceipt({
       imageBase64: "x",
       mimeType: "image/jpeg",
-      model: "claude-sonnet-5",
+      model: "gpt-4o-mini",
       apiKey: "key",
     });
     expect(mockCreate).toHaveBeenCalledWith(

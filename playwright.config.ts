@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-import { MOCK_ANTHROPIC_PORT } from "./tests/e2e/global-setup";
+import { MOCK_OPENAI_PORT } from "./tests/e2e/global-setup";
 
 try {
   process.loadEnvFile(".env");
@@ -27,7 +27,7 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
-      ANTHROPIC_BASE_URL: `http://localhost:${MOCK_ANTHROPIC_PORT}`,
+      OPENAI_BASE_URL: `http://localhost:${MOCK_OPENAI_PORT}/v1`,
     },
   },
 });

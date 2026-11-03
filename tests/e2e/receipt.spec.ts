@@ -6,10 +6,10 @@ import {
   setAiSettingsDirect,
 } from "./db-helpers";
 import { SEED_EMAIL, login, settle } from "./helpers";
-import { MOCK_AUTH_FAIL_KEY, MOCK_SUCCESS_KEY } from "./mock-anthropic-server";
+import { MOCK_AUTH_FAIL_KEY, MOCK_SUCCESS_KEY } from "./mock-openai-server";
 
 // A minimal valid 1x1 JPEG — content doesn't matter since the provider
-// call itself is stubbed (tests/e2e/mock-anthropic-server.ts).
+// call itself is stubbed (tests/e2e/mock-openai-server.ts).
 const TINY_JPEG = Buffer.from(
   "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
   "base64",
@@ -27,7 +27,7 @@ test.describe("receipt import", () => {
     // in this worker process — do not close it here; stats.spec.ts (the
     // last file to run) closes it once for the whole suite.
     await clearAiSettingsDirect(userId);
-    // The mock items are "Milk"/"Bread" (tests/e2e/mock-anthropic-server.ts).
+    // The mock items are "Milk"/"Bread" (tests/e2e/mock-openai-server.ts).
     await deleteExpensesByMerchantPrefix(userId, "Milk");
     await deleteExpensesByMerchantPrefix(userId, "Bread");
   });
@@ -35,7 +35,7 @@ test.describe("receipt import", () => {
   test("picking an image produces proposed rows, nothing saves before confirmation, editing/removing works, and Confirm & Save All writes every row", async ({
     page,
   }) => {
-    await setAiSettingsDirect(userId, "claude-sonnet-5", MOCK_SUCCESS_KEY);
+    await setAiSettingsDirect(userId, "gpt-4o-mini", MOCK_SUCCESS_KEY);
     await login(page);
     await page.goto("/expenses/new");
     await settle(page);
@@ -64,7 +64,7 @@ test.describe("receipt import", () => {
   test("Cancel writes nothing and returns to Add Expense", async ({
     page,
   }) => {
-    await setAiSettingsDirect(userId, "claude-sonnet-5", MOCK_SUCCESS_KEY);
+    await setAiSettingsDirect(userId, "gpt-4o-mini", MOCK_SUCCESS_KEY);
     await login(page);
     await page.goto("/expenses/new");
     await settle(page);
@@ -84,7 +84,7 @@ test.describe("receipt import", () => {
   test("a stubbed provider failure offers retry or manual entry", async ({
     page,
   }) => {
-    await setAiSettingsDirect(userId, "claude-sonnet-5", MOCK_AUTH_FAIL_KEY);
+    await setAiSettingsDirect(userId, "gpt-4o-mini", MOCK_AUTH_FAIL_KEY);
     await login(page);
     await page.goto("/expenses/new");
     await settle(page);

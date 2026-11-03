@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
-import { startMockAnthropicServer } from "./mock-anthropic-server";
+import { startMockOpenAIServer } from "./mock-openai-server";
 
-export const MOCK_ANTHROPIC_PORT = 4010;
+export const MOCK_OPENAI_PORT = 4010;
 
 // E2E runs against TEST_DATABASE_URL (FLOW.md Phase 5), independent of
 // whatever DATABASE_URL the gate's own `db:migrate`/`db:seed` lines target.
@@ -13,7 +13,7 @@ export default function globalSetup() {
   execSync("npx drizzle-kit migrate", { env, stdio: "inherit" });
   execSync("npx tsx db/seed.ts", { env, stdio: "inherit" });
 
-  const mockServer = startMockAnthropicServer(MOCK_ANTHROPIC_PORT);
+  const mockServer = startMockOpenAIServer(MOCK_OPENAI_PORT);
   return () => {
     mockServer.close();
   };

@@ -290,3 +290,21 @@ None beyond the WCAG-contrast deviation already recorded in Phase 4.
 None.
 
 ---
+
+## Post-launch change — AI provider switched to OpenAI; Settings gained a Verify button
+
+Requested directly by the user after launch, outside the Phase 1–5 plan.
+
+**Change:** `SPEC.md` §4 D5 previously fixed the single AI provider as Anthropic. Per explicit user direction this was changed to **OpenAI** (still single-provider, still no abstraction layer — that constraint was kept, only the named provider changed). `SPEC.md`, `FLOW.md`, the stack table, and the security principles section were all updated to say OpenAI instead of Anthropic; the documented default model changed from `claude-sonnet-5` to `gpt-4o-mini`.
+
+Also added, per explicit request: a **Verify** button on SCR-05 Settings (`lib/ai/verify-ai-settings.ts`, `verifyAiSettingsAction` in `app/(app)/settings/actions.ts`) that checks the typed (or, if the key field is blank, the already-stored) model + key against the provider via `models.retrieve` — the cheapest call that still confirms both the key is valid and the model id is accessible to it — and never persists anything, success or failure.
+
+**Why OpenAI and not a multi-provider abstraction (e.g. LiteLLM):** the user first asked about LiteLLM to support multiple providers; this was discussed and declined for this task — LiteLLM's core SDK is Python, so using it from this Node/TypeScript app would mean standing up a separate proxy service (new docker-compose component, OpenAI-compatible REST facade), which is a materially larger architectural change than what was asked, and directly against this project's own "no provider abstraction layer" rule (`CLAUDE.md` simplicity-first, `SPEC.md` D5). The user chose to switch providers outright instead.
+
+**Migration mechanics:** `lib/ai/parse-receipt.ts` rewritten from the Anthropic Messages API (`client.messages.create`, image content blocks) to the OpenAI Chat Completions API (`client.chat.completions.create`, `image_url` content parts, `response_format: { type: "json_object" }`). The `ParseReceiptParams`/`ParseReceiptResult`/`ParseReceiptFailure` contract and all failure copy are unchanged, so `app/(app)/expenses/new/actions.ts` (the caller) needed no changes. Error-class mapping carried over 1:1 (`OpenAI.AuthenticationError`/`PermissionDeniedError` → `auth`, `OpenAI.APIConnectionTimeoutError` → `timeout`). `@anthropic-ai/sdk` removed from `package.json`; `openai` added.
+
+**Test/tooling migration:** `lib/ai/parse-receipt.test.ts`, `app/(app)/expenses/new/actions.test.ts`, `app/(app)/settings/actions.test.ts`, `lib/validation/settings.test.ts`, and `components/settings/ai-settings-form.test.tsx` all updated to mock `openai` instead of `@anthropic-ai/sdk` and to use OpenAI-shaped fixtures/model names. `tests/e2e/mock-anthropic-server.ts` replaced by `tests/e2e/mock-openai-server.ts` (serves `GET /v1/models/:id` and `POST /v1/chat/completions` instead of `POST /v1/messages`); `playwright.config.ts` and `tests/e2e/global-setup.ts` updated from `ANTHROPIC_BASE_URL`/`MOCK_ANTHROPIC_PORT` to `OPENAI_BASE_URL`/`MOCK_OPENAI_PORT`. New `lib/ai/verify-ai-settings.test.ts` and a new e2e case in `tests/e2e/settings.spec.ts` cover the Verify button (success, auth failure, and that it never persists).
+
+**Manually verified in a real browser** against the user's own test OpenAI credentials (`.env.local`'s `TEST_OPENAI_API_KEY` / `TEST_AI_MODEL`), entered directly into the Settings form and checked with the live Verify button — see the session notes for the result at the time of this change.
+
+---

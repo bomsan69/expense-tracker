@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
+import { MOCK_AUTH_FAIL_KEY, MOCK_SUCCESS_KEY } from "./mock-openai-server";
 
-const RAW_KEY = "sk-ant-e2e-real-secret-key-998877";
+const RAW_KEY = "sk-e2e-real-secret-key-998877";
 
 test.describe("settings", () => {
   test("saving the AI config persists the model, shows the key masked only, and never leaks the raw key", async ({
@@ -9,7 +10,7 @@ test.describe("settings", () => {
   }) => {
     await login(page);
     await page.goto("/settings");
-    await page.getByLabel(/^AI Model/).fill("claude-sonnet-5");
+    await page.getByLabel(/^AI Model/).fill("gpt-4o-mini");
     await page.getByLabel(/^API Key/).fill(RAW_KEY);
 
     const responseBodies: string[] = [];
@@ -33,6 +34,36 @@ test.describe("settings", () => {
     const keyInput = page.getByLabel(/^API Key/);
     await expect(keyInput).toHaveAttribute("placeholder", /••••••••\d{4}/);
     await expect(keyInput).toHaveValue("");
+  });
+
+  test("Verify checks the typed model and key against the provider without saving", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/settings");
+    // Whatever key (if any) an earlier test in this shared-fixture file already
+    // stored — Verify must leave it exactly as-is either way.
+    const placeholderBefore = await page
+      .getByLabel(/^API Key/)
+      .getAttribute("placeholder");
+
+    await page.getByLabel(/^AI Model/).fill("gpt-4o-mini");
+    await page.getByLabel(/^API Key/).fill(MOCK_SUCCESS_KEY);
+    await page.getByRole("button", { name: "Verify" }).click();
+    await expect(page.getByText("Connection verified.")).toBeVisible();
+
+    await page.getByLabel(/^API Key/).fill(MOCK_AUTH_FAIL_KEY);
+    await page.getByRole("button", { name: "Verify" }).click();
+    await expect(
+      page.getByText("Your AI API key was rejected. Check it in Settings."),
+    ).toBeVisible();
+
+    // Verify never persists: reloading shows the same stored key as before.
+    await page.reload();
+    await expect(page.getByLabel(/^API Key/)).toHaveAttribute(
+      "placeholder",
+      placeholderBefore ?? "Enter API key",
+    );
   });
 
   test("adding a category makes it selectable on Add Expense", async ({
