@@ -210,3 +210,83 @@ None.
 None.
 
 ---
+
+## Phase 5 — Integration Testing, Accessibility & Bundling
+
+**Status:** Complete.
+
+### Gate commands run (from project root)
+
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run db:migrate
+npm run db:seed
+npm run test:e2e                              # full suite, 390x844
+npx playwright test tests/e2e/a11y.spec.ts
+npx playwright test tests/e2e/responsive.spec.ts
+npx playwright test tests/e2e/stats.spec.ts
+npm run build
+docker build -t expense-tracker:gate --target runtime .
+docker compose up -d --build
+docker compose run --rm migrate
+docker compose down
+```
+
+**Result:** all commands exited 0. 206 Vitest unit/integration tests and all 48 Playwright E2E tests pass (full suite run four times in a row with zero flakes after the fixes below); axe reports zero serious/critical violations on all 9 screens; no horizontal overflow at 320/390/430px; stats reconcile with hand-computed seeded figures; production build is clean with no environment variables present (confirmed twice — once standalone, once simultaneously without `.env`, `playwright.config.ts`, and `tests/e2e/`, exactly matching the Docker build context); the Docker image builds (`docker build --target runtime`, confirmed non-root uid 1001, no `.env` in the image, no secret `ARG`/`ENV` in the Dockerfile, no secret or password hash in `.next/static`); the full `docker compose up -d --build` → `docker compose run --rm migrate` → `curl /login` (200) and `/` (307) → `docker compose down` cycle completes against the actual containers, not just by inspecting the files.
+
+### Real defects found and fixed during this phase
+
+This phase surfaced an unusually large number of genuine bugs — both app code and test infrastructure — because it was the first point in the project where the whole stack ran together, under real browser automation, against a real database, repeatedly. Each is a defect that existed before this phase's testing exposed it, not something introduced by the testing itself.
+
+**App-code defects:**
+
+- **`.bind()` on a server action, passed as a prop into a Client Component's `useActionState`, does not reliably resolve.** `updateExpenseAction` (SCR-03 edit) and `renameCategoryAction` (SUP-02 rename) were both invoked via `action.bind(null, id)`. The server executed the request successfully (confirmed via network trace — a 200 response every time) but the client-side action/state transition never completed, so the UI hung indefinitely waiting for a result that had already arrived. Root-caused via Playwright trace inspection plus a disposable diagnostic spec with explicit console/network listeners. Fixed by passing the id through a hidden form field instead of `.bind()`, matching the pattern already used for `categoryId` in `ExpenseForm` — the architecturally correct fix, not a workaround. While fixing `updateExpenseAction`, found it was also missing the `redirect("/")` call `SPEC.md` §7 SCR-03 requires ("Save: validate → update → return to SCR-02"); it previously just returned `{ok:true}` with no navigation.
+- **The same category of bug, in a different shape, in `ReceiptPicker`.** It called `parseReceiptAction` as a bare `await` inside `startTransition`, not through a `<form action>` / `useActionState` — the one place in the app that didn't use the pattern every other mutation already uses. This was unreliable in exactly the same way: the request would intermittently never leave the browser (zero console output, zero network activity captured by Playwright listeners, confirmed by a standalone Node reproduction of the identical SDK call succeeding in under 50ms every time, ruling out the server/SDK/mock as the cause). Rewritten to route through `useActionState` + a `<form>` per file input, triggered by `requestSubmit()` on file selection — same fix family as above.
+- **The AI API key was never cleared from the DOM after a successful save.** `AiSettingsForm` kept the typed key in local component state indefinitely; a Playwright response-body/DOM sweep after save found the raw key still present in the rendered HTML's input `value` attribute, violating `SPEC.md` §9's "the raw key never appears in the DOM" requirement. Fixed by clearing the field synchronously on a successful state transition (the same "compare previous state, update synchronously during render" pattern already established in `CategoryRow`).
+- **`ExpenseRow`'s category/date line truncates instead of wrapping.** Found during the manual 200%-zoom accessibility pass (below): with a long merchant name at 200% zoom, the merchant text wraps onto multiple lines but the sibling `category · date` line had `className="truncate"`, so it single-line-ellipsized and the date became unreadable (`Food · Nov ...`) — a genuine zoom-clipping violation of `SPEC.md` §6.3/§6.8. Fixed by removing the truncate class so it wraps like the merchant line does; re-verified at 200% zoom afterward.
+- **`db/index.ts` created its MySQL pool (and threw on a missing `DATABASE_URL`) at module-import time.** Every authenticated page transitively imports it, and Next's build-time "collecting page data" step evaluates that whole import graph — without any `DATABASE_URL` present, which is required: the Docker build stage must never bake in a secret (`SPEC.md` §12, and the gate's own `! grep ... ARG|ENV ... DATABASE_URL` check on the Dockerfile forbids supplying even a placeholder there). `npm run build` reliably failed with "DATABASE_URL is not set" once `.env` wasn't present. Fixed by making `db` a `Proxy` that defers pool creation (and the missing-env-var check) to first real property access — the build never touches a property, so it never needs the variable; the first real request still fails fast and clearly if it's missing.
+
+**Test-infrastructure defects** (the app itself was correct; the tests or test doubles were not):
+
+- **`tests/e2e/mock-anthropic-server.ts` checked the wrong header.** It read `x-api-key` to decide which canned response to return, but the installed `@anthropic-ai/sdk` (v1.3.0) authenticates via `Authorization: Bearer <key>` for this client configuration — confirmed by dumping the actual request headers reaching the mock. The header check always missed, so the mock always returned its success payload, meaning `receipt.spec.ts`'s "a stubbed provider failure offers retry or manual entry" test was never actually exercising a failure at all. Fixed by reading `Authorization` instead.
+- **The same mock server never drained the request body before responding, and relied on default keep-alive.** On a socket the SDK's connection pool reused across requests in the same long-lived dev-server process, an undrained body could leave the next request on that socket waiting on bytes that were never going to arrive. Fixed by consuming the request body before writing a response and by sending `Connection: close` so every request gets a fresh socket — cheap and correct for a test-only server where performance doesn't matter.
+- **A React-hydration race in `receipt.spec.ts`.** `setInputFiles()` was called immediately after `page.goto("/expenses/new")`, with no wait for hydration to finish attaching the file input's `onChange` handler. On a page needing a fresh Turbopack compile (slower, more variable timing), the synthetic `change` event could fire before React had attached the listener, so the event did nothing — zero console output, zero network requests, the exact signature that made this so hard to separate from the two app-code bugs above. The fix already existed elsewhere in the suite (`tests/e2e/helpers.ts`'s `settle()`, a `networkidle` wait, added earlier for an analogous race after client-side link navigations) but `receipt.spec.ts` never called it after `page.goto`. Added `await settle(page)` after each of the three `page.goto("/expenses/new")` calls in that file. This alone — not the mock-server fixes, not an earlier attempt at pre-warming the route via a dedicated upload in `00-warmup.spec.ts` — is what made the suite reliable; the pre-warming attempt was reverted once this was found, since it was solving a symptom the real fix already covered.
+- **`tests/e2e/stats.spec.ts` picked its "Food"/"Travel" category ids off an unordered query.** `db-helpers.ts`'s `getCategoryIds()` had no `ORDER BY`, so MySQL served it via the `(user_id, name_normalized)` unique index — alphabetical, not insertion order. `settings.spec.ts` (which runs earlier and creates `"E2E Category ..."` / `"E2E Rename ..."` test categories on the shared seed user, and doesn't clean them up — a known, accepted gap, see Assumptions) sorts before `"Food"`, so the test was silently seeding its 3000/7000-cent expenses under the wrong categories, and `getByText("Food 30%")` correctly found nothing. Fixed by replacing `getCategoryIds()` with `getCategoryIdByName()`, which looks up by name instead of position.
+- **`settings.spec.ts`'s rename test scoped its edit-mode locator by text content that the edit itself removes.** `page.locator("li", { hasText: originalName })` stopped matching the instant `CategoryRow` swapped the name `<span>` for an `<input>` in edit mode, so the next `row.getByRole(...)` call on that stale locator found nothing. Fixed by re-scoping via `page.getByRole("listitem").filter({ has: page.getByLabel("Category name") })` — structural, not text-content-based, so it survives the swap.
+- **Next.js 16.4.4's dev-mode-generated `.next/dev/types/validator.ts` unconditionally imports `AppRouteHandlerRoutes` and `NextRequest`, even when the app defines no Route Handlers at all — making both imports always-unused and failing under this project's `noUnusedLocals`.** This broke `npm run build` outright (confirmed the production-mode `.next/types/validator.ts` does not have this bug — it correctly omits those imports). Next intentionally keeps `.next/dev/types/**/*.ts` in `tsconfig.json`'s `include` and re-adds it on every `next dev` start "to avoid tsconfig churn between dev/build modes" (confirmed by observation — removing it from `include` doesn't survive a dev-server start). Fixed by adding it to tsconfig's `exclude` instead, which TypeScript resolves with precedence over `include` regardless of how many times Next re-adds the `include` entry; confirmed this survives a `next dev` start.
+- **`.dockerignore` excluded `tests/e2e/` but not `playwright.config.ts`, which imports from it.** The first Docker build attempt failed `next build`'s TypeScript step inside the image with `Cannot find module './tests/e2e/global-setup'` — `playwright.config.ts` is copied into the build context (nothing excluded it) and is covered by `tsconfig.json`'s broad `**/*.ts`, but the file it imports isn't there, since excluding `tests/e2e/` from the image is correct and intentional (`SPEC.md` §12). Fixed by also excluding `playwright.config.ts` itself — pure test tooling with no runtime purpose in the image, so there's nothing lost by its absence, and nothing in the app imports it. Reproduced and verified locally first (moving `.env`, `playwright.config.ts`, and `tests/e2e/` aside, exactly mirroring the Docker build context) before rebuilding the image, rather than iterating on multi-minute Docker builds to diagnose it.
+
+### Manual accessibility checklist — 200% text zoom (`SPEC.md` §6.3, §6.8; `FLOW.md` Phase 5)
+
+Checked by hand, screen by screen, at 390×844 with `document.documentElement.style.zoom = 2` and the full scrollable height inspected via screenshots (not just the initial viewport) — scrolling to reach content is expected and acceptable; content becoming permanently unreachable, truncated, or overlapping is not.
+
+| Screen | Result |
+|---|---|
+| SCR-01 Login | Pass. Form fields scroll below the fold but are fully reachable and unclipped. |
+| SCR-02 Home | **Found and fixed** — see `ExpenseRow` defect above. Re-verified clean after the fix. |
+| SCR-03 Expense Detail | Pass. (The merchant `<input>` scrolls its own text internally when it overflows its box — normal native input behavior, not a clipping defect.) |
+| SCR-04 Add Expense | Pass. |
+| SCR-05 Settings | Pass. |
+| SCR-06 Statistics | Pass. |
+| SUP-01 Receipt Review | Pass, including a long merchant name and the duplicate-warning row. |
+| SUP-02 Manage Categories | Pass. |
+| SUP-03 Change Password | Pass. |
+
+### Assumptions taken
+
+- **`settings.spec.ts`'s test-created categories (`"E2E Category ..."`, `"E2E Rename ..."`) are never cleaned up**, accumulating on the shared seed user across every E2E run. This was the root cause that made the `stats.spec.ts` category-lookup bug above reproducible, and is now harmless to `stats.spec.ts` (fixed to look up by name) and to `filters.spec.ts` (which only needs *some* valid category id, not a specific one). Left as-is rather than adding cleanup, since it's pre-existing test-fixture scope and not part of the defect being fixed — flagged here rather than silently working around it twice.
+- **`docker compose run --rm migrate` resolves a service under `profiles: ["tools"]` without needing an explicit `--profile tools` flag.** Confirmed empirically (a standalone two-service compose file, one profiled, run via `docker compose run --rm <profiled-service>` with no profile flag) rather than assumed from documentation, since `FLOW.md`'s gate invokes it exactly that way and Compose's own docs are not fully explicit on this point for `run` versus `up`.
+- **The build stage's `public/` directory is created via `RUN mkdir -p public` before `npm run build`**, since the app has no `public/` directory (the favicon lives at `app/favicon.ico`, the App Router convention) but `SPEC.md` §12 and the runtime stage both expect to copy one — an empty directory satisfies both without inventing an unrequested app asset.
+- **No `MYSQL_DATABASE` env var needed for `docker-compose.yml`'s `mysql` service** — `docker/init.sql` (from Phase 1) already creates both `expense_tracker` and `expense_tracker_test` on first boot via the `docker-entrypoint-initdb.d` mechanism.
+
+### Deviations from `SPEC.md`
+
+None beyond the WCAG-contrast deviation already recorded in Phase 4.
+
+### Pre-existing dead code noted
+
+None.
+
+---

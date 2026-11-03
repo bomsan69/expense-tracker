@@ -34,11 +34,11 @@ export async function createCategoryAction(
 }
 
 export async function renameCategoryAction(
-  id: number,
   _prevState: ActionResult<Category> | undefined,
   formData: FormData,
 ): Promise<ActionResult<Category>> {
   const session = await requireSession();
+  const id = Number(formData.get("id"));
 
   const parsed = categoryNameSchema.safeParse(formData.get("name"));
   if (!parsed.success) {

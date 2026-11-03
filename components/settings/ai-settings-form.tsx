@@ -24,6 +24,17 @@ export function AiSettingsForm({ initialModel, maskedKey }: AiSettingsFormProps)
   // Starts blank: blank means "keep the stored key" (SPEC.md §7 SCR-05).
   const [apiKey, setApiKey] = useState("");
 
+  // Clear the typed key out of the DOM once it's been saved, synchronously
+  // during render rather than in an effect (react-hooks/set-state-in-effect)
+  // — SPEC.md §9 requires the raw key never linger once persisted.
+  const [prevState, setPrevState] = useState(state);
+  if (state !== prevState) {
+    setPrevState(state);
+    if (state?.ok) {
+      setApiKey("");
+    }
+  }
+
   return (
     <form action={formAction} className="flex flex-col gap-4">
       {error && (

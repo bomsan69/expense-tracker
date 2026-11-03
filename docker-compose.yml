@@ -26,5 +26,42 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/expense_tracker
+      SESSION_SECRET: ${SESSION_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/login"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: `docker compose run --rm migrate`. Under the `tools` profile so
+  # it never starts with `up` — migrations are never run from the app's own
+  # entrypoint, which would let two replicas race to mutate the schema.
+  migrate:
+    build:
+      context: .
+      target: build
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/expense_tracker
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: sh -c "npm run db:migrate && npm run db:seed"
+
 volumes:
   mysql-data:

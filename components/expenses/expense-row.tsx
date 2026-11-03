@@ -18,7 +18,7 @@ export function ExpenseRow({ expense, categoryName }: ExpenseRowProps) {
         >
           {expense.merchant}
         </Link>
-        <p className="truncate text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {categoryName} · {formatDate(expense.spentOn)}
         </p>
       </div>

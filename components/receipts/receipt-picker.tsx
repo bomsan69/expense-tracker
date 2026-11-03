@@ -1,10 +1,14 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ImagePlus } from "lucide-react";
-import { parseReceiptAction } from "@/app/(app)/expenses/new/actions";
+import {
+  parseReceiptAction,
+  type ReceiptItemProposal,
+} from "@/app/(app)/expenses/new/actions";
 import { Button } from "@/components/ui/button";
+import type { ActionResult } from "@/lib/action-result";
 import { RECEIPT_DRAFT_KEY, type ReceiptDraft } from "@/lib/receipt-draft";
 import type { Category } from "@/lib/queries/categories";
 
@@ -16,45 +20,57 @@ interface ReceiptPickerProps {
 
 export function ReceiptPicker({ categories }: ReceiptPickerProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  // A bare `await parseReceiptAction(...)` call (not routed through a
+  // <form action> / useActionState) was unreliable here — the request
+  // would intermittently never leave the browser, the same category of
+  // issue as the `.bind()` server-action bug found elsewhere in this app.
+  // Routing it through a form, as every other mutation in this app does,
+  // fixed it.
+  const [state, formAction, isPending] = useActionState<
+    ActionResult<ReceiptItemProposal[]> | undefined,
+    FormData
+  >(parseReceiptAction, undefined);
   const [error, setError] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const albumInputRef = useRef<HTMLInputElement>(null);
+  const filenameRef = useRef("");
 
-  function handleFile(file: File) {
-    setError(null);
-    const formData = new FormData();
-    formData.set("image", file);
-    startTransition(async () => {
-      const result = await parseReceiptAction(undefined, formData);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const defaultCategoryId = categories[0]?.id ?? null;
-      const draft: ReceiptDraft = {
-        filename: file.name,
-        items: result.data.map((item) => ({
-          ...item,
-          categoryId: defaultCategoryId,
-        })),
-      };
-      try {
-        sessionStorage.setItem(RECEIPT_DRAFT_KEY, JSON.stringify(draft));
-      } catch {
-        setError("Something went wrong. Please try again.");
-        return;
-      }
-      router.push("/receipt/review");
-    });
-  }
+  const serverError = state && !state.ok ? state.error : undefined;
+
+  useEffect(() => {
+    if (!state?.ok) return;
+    const defaultCategoryId = categories[0]?.id ?? null;
+    const draft: ReceiptDraft = {
+      filename: filenameRef.current,
+      items: state.data.map((item) => ({
+        ...item,
+        categoryId: defaultCategoryId,
+      })),
+    };
+    try {
+      sessionStorage.setItem(RECEIPT_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // sessionStorage can throw (private browsing, quota) — surfacing it
+      // needs a state update; there's no external system to subscribe to
+      // instead.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError("Something went wrong. Please try again.");
+      return;
+    }
+    router.push("/receipt/review");
+  }, [state, categories, router]);
 
   function onInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    event.target.value = "";
-    if (file) {
-      handleFile(file);
+    if (!file) {
+      return;
     }
+    setError(null);
+    filenameRef.current = file.name;
+    event.target.form?.requestSubmit();
+    // Clear it so re-selecting the identical file (e.g. after a failure)
+    // still fires a change event next time.
+    event.target.value = "";
   }
 
   return (
@@ -65,20 +81,23 @@ export function ReceiptPicker({ categories }: ReceiptPickerProps) {
         <span aria-hidden="true" className="h-px flex-1 bg-border" />
       </div>
 
-      {error && (
+      {(error ?? serverError) && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {error ?? serverError}
         </p>
       )}
 
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept={ACCEPTED_TYPES}
-        capture="environment"
-        className="hidden"
-        onChange={onInputChange}
-      />
+      <form action={formAction}>
+        <input
+          ref={cameraInputRef}
+          type="file"
+          name="image"
+          accept={ACCEPTED_TYPES}
+          capture="environment"
+          className="hidden"
+          onChange={onInputChange}
+        />
+      </form>
       <Button
         type="button"
         variant="outline"
@@ -90,13 +109,16 @@ export function ReceiptPicker({ categories }: ReceiptPickerProps) {
         {isPending ? "Scanning…" : "Take Photo"}
       </Button>
 
-      <input
-        ref={albumInputRef}
-        type="file"
-        accept={ACCEPTED_TYPES}
-        className="hidden"
-        onChange={onInputChange}
-      />
+      <form action={formAction}>
+        <input
+          ref={albumInputRef}
+          type="file"
+          name="image"
+          accept={ACCEPTED_TYPES}
+          className="hidden"
+          onChange={onInputChange}
+        />
+      </form>
       <Button
         type="button"
         variant="secondary"

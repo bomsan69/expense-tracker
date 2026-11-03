@@ -84,25 +84,28 @@ describe("getExpenseAction", () => {
 });
 
 describe("updateExpenseAction", () => {
-  it("updates the expense", async () => {
+  it("updates the expense and redirects home", async () => {
     const expense = await createExpense(userId, {
       spentOn: todayIso(),
       categoryId,
       merchant: "Original",
       amountMinor: 1000,
     });
-    const result = await updateExpenseAction(
-      expense.id,
-      undefined,
-      formData({
-        spentOn: todayIso(),
-        categoryId: String(categoryId),
-        merchant: "Updated",
-        amountMinor: "20.00",
-      }),
-    );
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.merchant).toBe("Updated");
+    await expect(
+      updateExpenseAction(
+        undefined,
+        formData({
+          id: String(expense.id),
+          spentOn: todayIso(),
+          categoryId: String(categoryId),
+          merchant: "Updated",
+          amountMinor: "20.00",
+        }),
+      ),
+    ).rejects.toThrow("/");
+    expect(mockRedirect).toHaveBeenCalledWith("/");
+    const updated = await getExpenseById(userId, expense.id);
+    expect(updated?.merchant).toBe("Updated");
   });
 
   it("rejects an invalid amount, preserving the stored record", async () => {
@@ -113,9 +116,9 @@ describe("updateExpenseAction", () => {
       amountMinor: 1000,
     });
     const result = await updateExpenseAction(
-      expense.id,
       undefined,
       formData({
+        id: String(expense.id),
         spentOn: todayIso(),
         categoryId: String(categoryId),
         merchant: "Updated",
@@ -142,9 +145,9 @@ describe("updateExpenseAction", () => {
     });
 
     const result = await updateExpenseAction(
-      otherExpense.id,
       undefined,
       formData({
+        id: String(otherExpense.id),
         spentOn: todayIso(),
         categoryId: String(categoryId),
         merchant: "Hijacked",

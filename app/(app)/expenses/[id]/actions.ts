@@ -25,11 +25,11 @@ export async function getExpenseAction(
 }
 
 export async function updateExpenseAction(
-  id: number,
   _prevState: ActionResult<Expense> | undefined,
   formData: FormData,
 ): Promise<ActionResult<Expense>> {
   const session = await requireSession();
+  const id = Number(formData.get("id"));
 
   const parsed = expenseInputSchema.safeParse({
     spentOn: formData.get("spentOn"),
@@ -51,7 +51,9 @@ export async function updateExpenseAction(
   if (!updated) {
     return { ok: false, error: NOT_FOUND_ERROR };
   }
-  return { ok: true, data: updated };
+  // Save: validate → update → return to SCR-02 with refreshed total and
+  // list (SPEC.md §7 SCR-03).
+  redirect("/");
 }
 
 export async function deleteExpenseAction(id: number): Promise<ActionResult> {

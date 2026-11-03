@@ -35,6 +35,10 @@ export interface ExpenseFormProps<T> {
   submitLabel: string;
   onDirtyChange?: (dirty: boolean) => void;
   showDirtyIndicator?: boolean;
+  /** Present for edit (SCR-03); the action reads it via a hidden field
+   * rather than via `.bind()`, which does not resolve reliably when the
+   * action is passed as a prop into this client component. */
+  id?: number;
 }
 
 export function ExpenseForm<T>({
@@ -44,6 +48,7 @@ export function ExpenseForm<T>({
   submitLabel,
   onDirtyChange,
   showDirtyIndicator = false,
+  id,
 }: ExpenseFormProps<T>) {
   const [state, formAction, isPending] = useActionState<
     ActionResult<T> | undefined,
@@ -71,6 +76,7 @@ export function ExpenseForm<T>({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {id !== undefined && <input type="hidden" name="id" value={id} />}
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

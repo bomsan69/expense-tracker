@@ -79,9 +79,8 @@ describe("renameCategoryAction", () => {
     const created = await createCategory(userId, "Food");
     if (!created.ok) throw new Error("setup failed");
     const result = await renameCategoryAction(
-      created.category.id,
       undefined,
-      formData({ name: "Groceries" }),
+      formData({ id: String(created.category.id), name: "Groceries" }),
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -96,9 +95,8 @@ describe("renameCategoryAction", () => {
     if (!otherCategory.ok) throw new Error("setup failed");
 
     const result = await renameCategoryAction(
-      otherCategory.category.id,
       undefined,
-      formData({ name: "Hijacked" }),
+      formData({ id: String(otherCategory.category.id), name: "Hijacked" }),
     );
     expect(result).toEqual({
       ok: false,

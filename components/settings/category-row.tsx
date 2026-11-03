@@ -15,11 +15,10 @@ interface CategoryRowProps {
 export function CategoryRow({ category }: CategoryRowProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
-  const boundRename = renameCategoryAction.bind(null, category.id);
   const [state, formAction, isPending] = useActionState<
     ActionResult<Category> | undefined,
     FormData
-  >(boundRename, undefined);
+  >(renameCategoryAction, undefined);
   const displayName = state?.ok ? state.data.name : category.name;
   const [name, setName] = useState(displayName);
   const error = state && !state.ok ? state.error : undefined;
@@ -61,6 +60,7 @@ export function CategoryRow({ category }: CategoryRowProps) {
   return (
     <li className="border-b border-border py-4">
       <form action={formAction} className="flex flex-col gap-2">
+        <input type="hidden" name="id" value={category.id} />
         <label htmlFor={`category-${category.id}`} className="sr-only">
           Category name
         </label>

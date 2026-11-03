@@ -15,7 +15,11 @@
   --popover: #ffffff;
   --popover-foreground: #111827;
   --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
+  /* SPEC.md §6.2 specifies #6B7280, but that fails WCAG AA (4.5:1) for
+     14px/16px text against --secondary/--muted (axe: 4.39:1) and the same
+     section also mandates AA contrast — darkened to the nearest common
+     "muted gray" that clears AA reliably against every surface it's used on. */
+  --muted-foreground: #4b5563;
   --border: #e5e7eb;
   --input: #d1d5db;
   --ring: #2563eb;

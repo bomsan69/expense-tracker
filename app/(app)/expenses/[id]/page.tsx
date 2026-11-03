@@ -48,7 +48,6 @@ export default async function ExpenseDetailPage({
   }
 
   const expense = result.data;
-  const boundUpdate = updateExpenseAction.bind(null, expense.id);
 
   return (
     <>
@@ -59,7 +58,8 @@ export default async function ExpenseDetailPage({
         </p>
 
         <ExpenseForm
-          action={boundUpdate}
+          action={updateExpenseAction}
+          id={expense.id}
           categories={categories}
           submitLabel="Save Changes"
           showDirtyIndicator

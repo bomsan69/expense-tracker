@@ -44,7 +44,7 @@ describe("CategoryRow", () => {
     await user.type(input, "Groceries");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(mockRename).toHaveBeenCalledWith(3, undefined, expect.anything()));
+    await waitFor(() => expect(mockRename).toHaveBeenCalledWith(undefined, expect.anything()));
     await screen.findByText("Groceries");
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });

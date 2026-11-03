@@ -1,0 +1,31 @@
+node_modules
+.next
+.git
+.github
+
+# env files — secrets are supplied at runtime, never baked into the image
+.env*
+!.env.example
+
+# tests and tooling, not part of the running app
+tests/e2e/
+playwright.config.ts
+test-results/
+playwright-report/
+playwright/.cache/
+coverage/
+*.tsbuildinfo
+
+# docs and design inputs, not part of the running app
+expense_tracker_design/
+*.pptx
+*.pdf
+README.md
+BUILD_LOG.md
+SPEC.md
+FLOW.md
+AGENTS.md
+CLAUDE.md
+
+.DS_Store
+npm-debug.log*
