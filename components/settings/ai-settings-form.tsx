@@ -1,0 +1,75 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { saveAiSettingsAction } from "@/app/(app)/settings/actions";
+import { FormField } from "@/components/forms/form-field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type { ActionResult } from "@/lib/action-result";
+
+interface AiSettingsFormProps {
+  initialModel: string;
+  maskedKey: string | null;
+}
+
+export function AiSettingsForm({ initialModel, maskedKey }: AiSettingsFormProps) {
+  const [state, formAction, isPending] = useActionState<
+    ActionResult | undefined,
+    FormData
+  >(saveAiSettingsAction, undefined);
+  const error = state && !state.ok ? state.error : undefined;
+  const success = state?.ok === true;
+
+  const [model, setModel] = useState(initialModel);
+  // Starts blank: blank means "keep the stored key" (SPEC.md §7 SCR-05).
+  const [apiKey, setApiKey] = useState("");
+
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p role="status" className="text-sm text-foreground">
+          Settings saved.
+        </p>
+      )}
+
+      <FormField id="aiModel" label="AI Model">
+        <Input
+          id="aiModel"
+          name="aiModel"
+          placeholder="Enter model ID"
+          value={model}
+          onChange={(event) => setModel(event.target.value)}
+        />
+      </FormField>
+
+      <FormField id="aiApiKey" label="API Key">
+        <Input
+          id="aiApiKey"
+          name="aiApiKey"
+          type="password"
+          autoComplete="off"
+          placeholder={maskedKey ?? "Enter API key"}
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
+        />
+      </FormField>
+      <p className="text-xs text-muted-foreground">
+        Your API key is handled securely. Never displayed in application
+        logs.
+      </p>
+
+      <Button
+        type="submit"
+        disabled={isPending}
+        className="min-h-12 w-full rounded-md bg-accent font-semibold text-white"
+      >
+        {isPending ? "Saving…" : "Save Settings"}
+      </Button>
+    </form>
+  );
+}

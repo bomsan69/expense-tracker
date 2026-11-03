@@ -45,7 +45,9 @@ const RECEIPT_PROMPT = `You are reading a photo of a retail receipt. List every 
 Exclude tax, tip, subtotal, and total lines entirely — they are not line items.
 Respond with only JSON, no prose, in this exact shape:
 {"items": [{"date": "YYYY-MM-DD", "merchant": "string", "amount": "12.99"}]}
-Use the receipt's own date for every item. "merchant" is the store name on the receipt.
+Use the receipt's own date for every item. "merchant" is that line item's own name or
+description as printed on the receipt (e.g. "Milk", "Coffee"), not the store's name —
+each item gets its own row, so repeating the store name for every row is not useful.
 "amount" is the line item's price as a decimal string with at most 2 decimal places.
 If you cannot find any purchased line items, respond with {"items": []}.`;
 

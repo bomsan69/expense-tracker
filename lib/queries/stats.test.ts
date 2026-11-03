@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createCategory } from "./categories";
 import { createExpense } from "./expenses";
-import { categoryBreakdownLastMonth, monthlyTotals } from "./stats";
+import {
+  categoryBreakdownLastMonth,
+  monthlyTotals,
+  previousCalendarMonthLabel,
+} from "./stats";
 import { createTestUser, deleteTestUser } from "./test-helpers";
 
 function monthStartIso(monthsAgo: number): string {
@@ -111,5 +115,20 @@ describe("categoryBreakdownLastMonth", () => {
 
   it("returns an empty array when there are no expenses last month", async () => {
     expect(await categoryBreakdownLastMonth(userId)).toEqual([]);
+  });
+});
+
+describe("previousCalendarMonthLabel", () => {
+  it("formats the previous calendar month as 'Month YYYY'", () => {
+    const now = new Date();
+    const expectedDate = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+    );
+    const expected = new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(expectedDate);
+    expect(previousCalendarMonthLabel()).toBe(expected);
   });
 });

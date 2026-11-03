@@ -158,3 +158,55 @@ None beyond the HEIC provider-support gap noted above, which is a real external 
 None.
 
 ---
+
+## Phase 4 — UI/UX & State Integration
+
+**Status:** Complete.
+
+### Gate commands run (from project root)
+
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npx vitest run components app
+! grep -rnE "#[0-9a-fA-F]{6}" app components --include=*.tsx
+! grep -rn "style={{" app components --include=*.tsx
+! grep -rn "from '@heroicons\|from 'react-icons\|from '@mui" app components --include=*.tsx
+perl -CSD -ne 'exit 1 if /[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}]/' $(find app components -name '*.tsx')
+test "$(grep -rln 'BottomNav' app --include=*.tsx | grep -v '(app)/layout.tsx' | wc -l | tr -d ' ')" = "0"
+grep -rq "<Label\|htmlFor=" components app --include=*.tsx
+grep -rq "<table" components/charts
+! grep -rniE "delete" app/\(app\)/settings/categories components/settings/category-row.tsx --include=*.tsx
+npm run build
+```
+
+**Result:** all commands exited 0. 206 Vitest unit/integration tests plus 103 component tests pass. Production build is clean; every authenticated route is correctly dynamic (reads the session). Verified in a real browser (Playwright) end-to-end: login → create expense → appears on Home with total updated → open detail → delete with confirmation dialog → Stats empty-chart states → Settings → Manage Categories → receipt review's no-draft redirect. No console errors on any screen.
+
+### Real defects found and fixed during this phase
+
+- **AI receipt prompt asked for the wrong field.** Comparing the built SUP-01 screen against `expense_tracker_design/mockups/SUP-01.png`, each row's bold title is the **line item's own name** (e.g. "Milk", "Bread"), not the store name. `lib/ai/parse-receipt.ts`'s prompt originally told the model `"merchant" is the store name on the receipt`, which would have produced the same store name repeated on every row — not useful, and not what the mockup shows. Reworded the prompt to ask for the line item's own name/description. No schema or field-name change (the JSON key stays `merchant` since it maps straight to `expenses.merchant`); this was a prompt-content bug, not a type-level one, so it would not have been caught by typecheck/lint/tests — only by comparing the rendered screen against the mockup, which is why `FLOW.md` requires that comparison at the end of this phase.
+- **React 19's `<form action={fn}>` resets uncontrolled fields after every submission, including failed ones.** `LoginForm`'s own test (not the gate's generic guards) caught this: a failed login cleared the typed email, directly violating `SPEC.md` §6.6 "form data is preserved on failure" and the SCR-03 "save failure retains edits" requirement. This is a real, documented React 19 behavior, not a bug in a specific component. Fixed by making every form field controlled (`value` + `onChange` backed by `useState`) across `LoginForm`, `ExpenseForm`, `ChangePasswordForm`, `AiSettingsForm`, `AddCategoryForm`, `CategoryRow`, and `ReceiptRow`, rather than relying on the DOM's own field state. This is now the standing pattern for every form in the app.
+- **Receipt-parsed items had no category**, but SUP-01's design shows one per row and the expense schema requires one. `lib/ai/parse-receipt.ts` deliberately doesn't ask the model to choose from the user's categories (D4 doesn't ask for this, and giving an LLM a closed category list to choose from is a separate, unreviewed prompt-design decision). Resolved by defaulting every parsed item to the user's first category (alphabetical, from the already-fetched list) when the draft is built in `ReceiptPicker`, with "Edit" on each `ReceiptRow` letting the user correct it before saving — matches SUP-01's explicit "each editable" requirement.
+
+### Assumptions taken
+
+- **Email for login has no required-indicator ambiguity, but labels with a required asterisk change their accessible name** (e.g. "Email" renders as "Email *"). Component tests use non-exact label matchers (`/^Email/`) throughout rather than exact string matches, which is the correct Testing Library pattern for this, not a workaround.
+- **A real jsdom/Radix UI gap**: `Element.prototype.hasPointerCapture` is unimplemented in jsdom, which Radix's `Select` calls. Polyfilled in `vitest.setup.ts` (`hasPointerCapture`, `releasePointerCapture`, `scrollIntoView` all no-op) — a test-environment fix, not an application change.
+- **One narrowly-scoped `eslint-disable-next-line react-hooks/set-state-in-effect`**, in `ReceiptReviewClient`, for the single `setState` call that syncs React state from `sessionStorage` on mount. This is genuinely the "sync from an external system" case the rule's own description permits (sessionStorage doesn't exist during SSR, so it can only be read in an effect) — restructured first to a single state object and single call site to minimize the disable's footprint, and it is not a blanket disable (one rule, one line, file-scoped, with the justification in the comment). `AGENTS.md`'s prohibition on "blanket `eslint-disable`" is read as targeting disables used to dodge real problems; this is a documented, narrow exception to a heuristic rule, not an example of either.
+- **`.nvmrc`/Node 24 toolchain note carries forward** — no new runtime constraint this phase.
+- **Design decisions not fully specified by SPEC.md, resolved from the mockups and D-decisions:**
+  - Settings → AI Configuration's API key field starts blank with the masked value (`••••••••1234`) as its *placeholder*, never its *value* — putting the mask in the value would make an untouched submit send the literal masked string as if it were a real key change.
+  - Change Password's success state shows a confirmation message and auto-returns to Settings after ~1.2s (SPEC.md §7 SUP-03 says "success confirmation then return to SCR-05" without timing specifics).
+  - The duplicate-item warning on SUP-01 is text-only ("Possible duplicate of an existing expense"), no icon — SPEC.md §6.4's icon list has no warning/alert glyph, and "no bespoke icon art" rules out inventing one; a colour-only treatment would also violate §6.1's "colour-carried state must also carry text."
+  - Pagination renders every page number (no ellipsis/truncation) — matches the `‹ 1 2 3 ›` mockup literally; nothing in SPEC.md addresses large page counts.
+
+### Deviations from SPEC.md
+
+None.
+
+### Pre-existing dead code noted
+
+None.
+
+---

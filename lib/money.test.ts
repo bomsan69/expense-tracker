@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, parseAmountToMinor } from "./money";
+import { formatMoney, minorToInputValue, parseAmountToMinor } from "./money";
 
 describe("formatMoney", () => {
   it("formats cents as a USD currency string", () => {
@@ -34,5 +34,16 @@ describe("parseAmountToMinor", () => {
 
   it("rejects non-numeric input", () => {
     expect(() => parseAmountToMinor("abc")).toThrow();
+  });
+});
+
+describe("minorToInputValue", () => {
+  it("is the inverse of parseAmountToMinor", () => {
+    expect(minorToInputValue(8530)).toBe("85.30");
+    expect(parseAmountToMinor(minorToInputValue(8530))).toBe(8530);
+  });
+
+  it("pads a single-digit cents remainder", () => {
+    expect(minorToInputValue(105)).toBe("1.05");
   });
 });

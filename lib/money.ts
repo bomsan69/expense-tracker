@@ -21,3 +21,11 @@ export function parseAmountToMinor(input: string): number {
   const cents = fractionPart.padEnd(2, "0");
   return Number(wholePart) * 100 + Number(cents);
 }
+
+// For pre-filling an edit form's amount input with a plain decimal string
+// (no currency symbol or thousands separators) — the inverse of parseAmountToMinor.
+export function minorToInputValue(cents: number): string {
+  const dollars = Math.floor(cents / 100);
+  const remainder = cents % 100;
+  return `${dollars}.${String(remainder).padStart(2, "0")}`;
+}

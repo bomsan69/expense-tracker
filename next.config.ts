@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // AGENTS.md here is the project's hand-authored agent canon; don't let
+  // `next dev` append its own generated block to it on every run.
+  agentRules: false,
   turbopack: {
     rules: {
       "*.css": {

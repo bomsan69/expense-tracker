@@ -114,6 +114,19 @@ function reconcilePercentages(
   }));
 }
 
+// For the "Last Month by Category" chart's subtitle, e.g. "October 2026".
+export function previousCalendarMonthLabel(): string {
+  const { year: currentYear, month: currentMonth } = currentYearMonth();
+  const { year, month } = yearMonthFromIndex(
+    monthIndex(currentYear, currentMonth) - 1,
+  );
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
 export async function categoryBreakdownLastMonth(
   userId: number,
 ): Promise<CategoryBreakdownItem[]> {
