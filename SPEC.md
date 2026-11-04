@@ -99,6 +99,7 @@ ENCRYPTION_KEY=            # 32-byte key, base64, for AES-256-GCM of the AI API 
 SEED_USER_EMAIL=
 SEED_USER_PASSWORD=
 MYSQL_ROOT_PASSWORD=       # local docker-compose MySQL only; not used by the app
+OPENAI_BASE_URL=           # optional; OpenAI-compatible endpoint (e.g. OpenRouter). Blank = OpenAI's own.
 ```
 
 ---

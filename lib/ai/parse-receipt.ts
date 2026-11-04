@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { isValidIsoDate } from "@/lib/dates";
+import { isValidIsoDate, todayIso } from "@/lib/dates";
+import { logError } from "@/lib/logging/error-log";
 import { parseAmountToMinor } from "@/lib/money";
 
 export const RECEIPT_TIMEOUT_MS = 30_000;
@@ -118,6 +119,11 @@ export async function parseReceipt(
     );
     const content = response.choices[0]?.message.content;
     if (!content) {
+      logError("AI provider returned an empty response", {
+        action: "parseReceipt",
+        model: params.model,
+        reason: "empty_response",
+      });
       return failure("no_items");
     }
     responseText = content;
@@ -131,25 +137,44 @@ export async function parseReceipt(
     if (error instanceof OpenAI.APIConnectionTimeoutError) {
       return failure("timeout");
     }
+    // Anything else (rate limit, model-not-found, a provider-side 500, …)
+    // was previously indistinguishable from the model genuinely finding
+    // nothing — log the real cause here instead of silently relabeling it.
+    logError(error, {
+      action: "parseReceipt",
+      model: params.model,
+      reason: "provider_call_failed",
+    });
     return failure("no_items");
   }
 
   const json = extractJsonObject(responseText);
   const parsed = receiptResponseSchema.safeParse(json);
   if (!parsed.success) {
+    logError("AI response was not the expected JSON shape", {
+      action: "parseReceipt",
+      model: params.model,
+      reason: "unparseable_response",
+      responseText,
+    });
     return failure("no_items");
   }
 
   const items: ParsedReceiptItem[] = [];
   for (const item of parsed.data.items) {
     const merchant = item.merchant.trim();
-    if (!merchant || !isValidIsoDate(item.date)) {
+    if (!merchant) {
       continue;
     }
+    // Some models leave "date" blank or return something unparseable rather
+    // than the receipt's own date — fall back to today rather than dropping
+    // an otherwise-good item (merchant + amount) that the user can still
+    // correct on the review screen.
+    const spentOn = isValidIsoDate(item.date) ? item.date : todayIso();
     try {
       const amountMinor = parseAmountToMinor(item.amount);
       if (amountMinor > 0) {
-        items.push({ spentOn: item.date, merchant, amountMinor });
+        items.push({ spentOn, merchant, amountMinor });
       }
     } catch {
       continue;
@@ -157,6 +182,13 @@ export async function parseReceipt(
   }
 
   if (items.length === 0) {
+    logError("AI response parsed but yielded no usable items", {
+      action: "parseReceipt",
+      model: params.model,
+      reason: "zero_items",
+      rawItemCount: parsed.data.items.length,
+      responseText,
+    });
     return failure("no_items");
   }
   return { ok: true, items };

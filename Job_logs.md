@@ -25,6 +25,20 @@
 - `lib/`·`app/` 전체의 예외 삼키는 catch 블록을 전수 조사해 이 한 곳만 실제 버그였음을 확인
 - `BUILD_LOG.md` — 원인 분석 및 수정 내역 기록
 
+### 영수증 인식 "no_items" 원인 진단 로그 추가 + OpenRouter 전환용 OPENAI_BASE_URL 연결
+- `lib/ai/parse-receipt.ts` — `no_items`로 뭉뚱그려지던 4가지 서로 다른 원인(모델이 빈 응답 / JSON 형식 불일치 / 필터링으로 0개 / auth·timeout이 아닌 provider 예외)을 구분해 `logs/`에 모델명·원인·원본 응답과 함께 기록
+- `docker-compose.yml` — `app` 서비스에 `OPENAI_BASE_URL` 환경변수 pass-through 추가 (OpenRouter 등 OpenAI 호환 엔드포인트로 전환 가능, 비워두면 기존과 동일하게 OpenAI 기본 엔드포인트 사용 — SDK가 이미 네이티브 지원하므로 코드 분기 없음)
+- `.env.example`, `README.md`, `SPEC.md` §3 — `OPENAI_BASE_URL` 변수 문서화
+- `lib/ai/parse-receipt.test.ts` — 4가지 원인별 로그 기록 검증 테스트 추가
+
+### 모델이 날짜를 빈 값으로 반환할 때 항목이 통째로 드롭되던 문제 수정
+- 사용자가 `TEST_AI_MODEL`을 `gpt-6.1-sol`로 바꿔 인식률 테스트 요청 → 실제 테스트 결과 merchant·금액은 매번 정확히 인식하지만 `date`가 항상 빈 문자열로 와서 전체 항목이 드롭되고 있음을 새 진단 로그로 즉시 확인
+- `lib/ai/parse-receipt.ts` — 날짜가 비어있거나 파싱 불가하면 오늘 날짜(`todayIso()`)로 대체하고 항목은 저장되도록 변경 (merchant·금액 무효는 여전히 드롭)
+- `lib/ai/parse-receipt.test.ts` — 날짜 대체 동작 테스트 추가, 기존 "날짜 무효 시 드롭" 테스트를 금액 무효 케이스로 분리
+- `app/(app)/receipt/review/actions.test.ts`, `lib/ai/parse-receipt.test.ts` — 여러 테스트 파일이 같은 `logs/<날짜>.log`에 동시에 쓰면서 생기던 로그 검증 테스트 레이스 컨디션을 `action` 태그 필터링으로 수정 (3연속 전체 스위트 실행으로 안정성 확인)
+- 실제 모델(`gpt-6.1-sol`)과 실제 영수증 파일로 수정 전/후 직접 재검증
+- `BUILD_LOG.md` — 두 작업 모두 원인 분석 및 수정 내역 기록
+
 ## 2026-11-03
 
 ### Docker 포트 매핑 변경

@@ -35,6 +35,12 @@ services:
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/expense_tracker
       SESSION_SECRET: ${SESSION_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      # Optional: the `openai` SDK reads this itself if set, to point at an
+      # OpenAI-compatible endpoint (e.g. OpenRouter) instead of OpenAI's own.
+      # Unset or blank → the SDK's own default (api.openai.com). Still a
+      # single OpenAI-shaped client either way — no provider abstraction
+      # layer (SPEC.md §4 D5).
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
     ports:
       - "3400:3000"
     volumes:

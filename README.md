@@ -25,6 +25,7 @@ npm run dev                 # http://localhost:3000
 | `ENCRYPTION_KEY` | 32-byte key, base64-encoded, encrypts the stored AI API key (AES-256-GCM) |
 | `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | Credentials `db:seed` creates for local sign-in |
 | `MYSQL_ROOT_PASSWORD` | Local/Docker MySQL root password only — the app itself never uses it |
+| `OPENAI_BASE_URL` | Optional. Points the `openai` SDK at an OpenAI-compatible endpoint (e.g. OpenRouter) instead of OpenAI's own. Blank/unset = OpenAI's default. |
 
 ## Commands
 

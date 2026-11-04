@@ -364,3 +364,41 @@ Reported by the user: on a separately-deployed real server, scanning the same re
 **Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (173 tests), `npm run build`, and `npx playwright test tests/e2e/receipt.spec.ts tests/e2e/settings.spec.ts` (9 tests) all green.
 
 ---
+
+## Post-launch addition — diagnostic logging for `no_items`, and an optional OpenRouter escape hatch
+
+User report: on their own deployed server, the same receipt image sometimes parsed fine and sometimes came back "No expense items were found," with nothing in `logs/` either way — they couldn't tell if this was a real bug or just the AI being inconsistent.
+
+**Confirmed it's AI-side non-determinism, not a bug**, by re-uploading the same `tests/costco_recepit.jpeg` with zero code changes three times in the earlier browser session: once 8 items, twice "no items found." `gpt-4o-mini` is a cheaper, lower-accuracy vision model, and Costco receipts (dense columns, abbreviated codes) are a hard OCR case — this combination explains the flakiness on its own.
+
+**But `lib/ai/parse-receipt.ts`'s `"no_items"` outcome was conflating four genuinely different situations into one silent, unlogged result:** the model legitimately returning `{"items": []}`; every parsed item getting filtered out by our own date/merchant/amount validation; the response not matching the expected JSON shape at all; and — the most concerning one — **any provider-side error that wasn't specifically an auth or timeout error** (rate limit, "model not found," a 5xx from the provider, etc.) being silently relabeled as "no items found" with the real cause discarded. A typo'd model name or a transient provider outage would have looked identical to the AI just not recognizing the receipt.
+
+**Fix:** each of those four branches now calls `lib/logging/error-log.ts`'s `logError` before returning the same user-facing `"no_items"` message — tagged with a `reason` (`empty_response` / `unparseable_response` / `zero_items` / `provider_call_failed`), the `model` string, and (for the shape/zero-items cases) the raw `responseText` and `rawItemCount`, so a future occurrence shows whether the model actually returned nothing vs. returned items that got filtered vs. the call itself failed for an unrelated reason. Never logs the API key, matching the rest of this logging system.
+
+**Also added, per the user's question about using OpenRouter:** no code change was needed for that specifically — the `openai` SDK already reads `OPENAI_BASE_URL` natively when no `baseURL` is passed explicitly (same mechanism this project's own e2e mock server already relies on), and OpenRouter speaks the same API shape, so pointing at it is just a matter of setting that env var and using an OpenRouter-style model id (e.g. `google/gemini-2.0-flash-001`) as the existing free-text "AI Model" field already accepts. The only real gap was that `docker-compose.yml` didn't pass `OPENAI_BASE_URL` through to the `app` container at all, so added that (defaulting to blank via `${OPENAI_BASE_URL:-}`, which the SDK then treats as unset and falls back to `api.openai.com`) plus the var to `.env.example` and the README's env table. This is still a single OpenAI-shaped client with zero branching per provider — not the multi-provider abstraction layer `SPEC.md` §4 D5 rules out.
+
+**Tests:** extended `lib/ai/parse-receipt.test.ts` with three new cases (plus an added assertion on the existing `no_items` case) verifying each logged reason, the raw response/item-count fields, and that an unexpected provider error logs its real message instead of being silently relabeled.
+
+**Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (175 tests, up from 173), `npm run build`, `npx playwright test tests/e2e/receipt.spec.ts` (4 tests), and `docker compose config` (confirms `OPENAI_BASE_URL` resolves to an empty string by default, which the SDK treats as "use the default endpoint") all green.
+
+---
+
+## Post-launch fix — a model that found every item but left every date blank; items were dropped instead of saved
+
+The user set `TEST_AI_MODEL` to a model (`gpt-6.1-sol`) and asked for a recognition-rate test, using the diagnostic logging added in the previous entry.
+
+**Found via that same logging, immediately:** the model correctly recognized all 8 line items (merchant + amount matched what `gpt-4o-mini` had found on its one successful run) but returned `"date": ""` for every single item, consistently across two separate calls. `lib/ai/parse-receipt.ts`'s per-item loop treated any item with an invalid/blank date as unusable and dropped it outright — so a model that was actually *more* reliable at finding items than `gpt-4o-mini` still produced a hard "No expense items were found" failure, because the one field it wouldn't fill in silently discarded every item that had it.
+
+(Separately, mid-investigation, the same model briefly returned an "auth" failure — traced to `.env.local` having an OpenRouter-formatted key [`sk-or-v1-...`] in `TEST_OPENAI_API_KEY` without `OPENAI_BASE_URL` pointed at OpenRouter, so OpenAI's own endpoint correctly rejected a key in a shape it doesn't issue. Not a code defect; the user corrected the env file.)
+
+**Fix:** `parseReceipt`'s item loop now falls back to `todayIso()` (`lib/dates.ts`) when `item.date` is blank or fails `isValidIsoDate`, instead of dropping the item — merchant and amount are still required and still cause a drop if invalid. The user can still correct the guessed date on the Receipt Review screen before saving. Decided with the user: apply this to any model returning a bad date, not just this one.
+
+**Test:** `lib/ai/parse-receipt.test.ts` — replaced the old "drops items with an invalid amount or date" case (now split: one for invalid-amount-still-drops, one new one asserting blank/garbled dates fall back to today while a valid date passes through unchanged) and fixed the "logs the raw response when every item gets filtered out" case, which had relied on an invalid-date item to reach zero items and needed a different kind of invalid item (bad amount) now that date alone no longer filters anything out.
+
+**Also fixed, found while re-running the gate:** the three log-content assertions added in the previous two entries (`parse-receipt.test.ts` ×3, `actions.test.ts` ×1) were flaky under the full suite — vitest runs test files in separate concurrent workers that all append to the same shared `logs/<date>.log`, so a plain "N new lines since this test started" count could pick up another file's unrelated entries written in the same window. Fixed by filtering the "new lines" to each test's own `action` tag (`"parseReceipt"` / `"saveBatchAction"`) before asserting on them, rather than relying on raw position. Verified by running the full `node` suite three times in a row with no failures (it had failed intermittently before the fix, once observed directly).
+
+**Verified against the real model, not just the mock:** ran `parseReceipt()` directly against the real `tests/costco_recepit.jpeg` with the user's actual key and `gpt-6.1-sol` before and after the fix — before: `{ ok: false, error: "no_items" }` with the log showing `rawItemCount: 8` and every item's `date: ""`; after: `{ ok: true, items: [...8 items, all dated today...] }`.
+
+**Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (176 tests) × 3 consecutive clean runs, `npm run build`, and `npx playwright test tests/e2e/receipt.spec.ts` (4 tests) all green.
+
+---

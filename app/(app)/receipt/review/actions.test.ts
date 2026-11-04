@@ -21,6 +21,16 @@ function todaysLogLines(): string[] {
   }
 }
 
+// Other test files run concurrently in separate vitest workers and append
+// to this same shared logs/<date>.log file, so filter to this module's own
+// `action` tag to isolate from that cross-file interleaving.
+function newSaveBatchLogLines(linesBefore: number): Record<string, unknown>[] {
+  return todaysLogLines()
+    .slice(linesBefore)
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((entry) => entry.action === "saveBatchAction");
+}
+
 const cookieJar = createMockCookieJar();
 const mockRedirect = vi.fn(createMockRedirect());
 
@@ -137,12 +147,10 @@ describe("saveBatchAction", () => {
 
     // The generic message above is all the user sees — this is the only
     // trail of what actually went wrong.
-    const newLines = todaysLogLines().slice(linesBefore);
+    const newLines = newSaveBatchLogLines(linesBefore);
     expect(newLines).toHaveLength(1);
-    const entry = JSON.parse(newLines[0] as string);
-    expect(entry.action).toBe("saveBatchAction");
-    expect(entry.userId).toBe(userId);
-    expect(typeof entry.message).toBe("string");
+    expect(newLines[0]?.userId).toBe(userId);
+    expect(typeof newLines[0]?.message).toBe("string");
 
     await deleteTestUser(other.id);
   });
