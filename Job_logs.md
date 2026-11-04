@@ -19,6 +19,12 @@
 - `SPEC.md` §10(파일 트리), §12(운영 규칙) — 로깅 시스템 반영
 - 실제로 DB 연결을 끊어 서버 에러를 재현하고 `logs/` 파일에 정상 기록되는 것을 직접 확인
 
+### 영수증 저장(Confirm & Save All) 시 예외가 로그 없이 사라지는 블라인드 스팟 수정
+- `app/(app)/receipt/review/actions.ts` — `saveBatchAction`의 `catch` 블록이 `createManyExpenses`의 실제 예외(예: 카테고리 소유권 불일치로 인한 "Category not found")를 로그 없이 삼키던 문제 발견 및 수정, `logError(error, { action, userId })` 추가
+- `app/(app)/receipt/review/actions.test.ts` — DB 레벨 실패 테스트에 로그 기록 검증 추가
+- `lib/`·`app/` 전체의 예외 삼키는 catch 블록을 전수 조사해 이 한 곳만 실제 버그였음을 확인
+- `BUILD_LOG.md` — 원인 분석 및 수정 내역 기록
+
 ## 2026-11-03
 
 ### Docker 포트 매핑 변경

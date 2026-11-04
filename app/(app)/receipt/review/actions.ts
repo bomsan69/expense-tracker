@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
+import { logError } from "@/lib/logging/error-log";
 import { createManyExpenses } from "@/lib/queries/expenses";
 import { expenseInputSchema } from "@/lib/validation/expense";
 
@@ -43,7 +44,12 @@ export async function saveBatchAction(
 
   try {
     await createManyExpenses(session.userId, validInputs);
-  } catch {
+  } catch (error) {
+    // Unlike the row-validation rejections above, this is an unexpected
+    // failure (e.g. a DB-level error) — the user only ever sees the generic
+    // message below, so without this it would vanish with no diagnostic
+    // trail at all.
+    logError(error, { action: "saveBatchAction", userId: session.userId });
     return { ok: false, error: BATCH_FAILURE_ERROR };
   }
 

@@ -348,3 +348,19 @@ Requested directly by the user: a way to find the cause when a server error happ
 **Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (173 tests, up from 169), `npm run build`, and a full `npx playwright test` run (50 tests) all green. Two unrelated pre-existing flakes (`a11y.spec.ts` SCR-03, `responsive.spec.ts` /stats at 320px — both dev-server cold-start timing) reproduced on a clean run and passed individually on retry; neither touches anything this change modified.
 
 ---
+
+## Post-launch fix — the one place that still swallowed errors without logging them
+
+Reported by the user: on a separately-deployed real server, scanning the same receipt and clicking "Confirm & Save All" (with a category already chosen per row, unlike the first report below) did nothing, and `logs/` stayed empty despite the new logging added above.
+
+**First, ruled out a simpler explanation by reproducing directly:** with no category chosen per row (the AI-extracted rows always start as "Uncategorized" — the AI never assigns one), Confirm & Save All correctly blocks the save and shows `"Nothing was saved. Fix the highlighted rows and try again."` plus a per-row `"Select a category."` — a normal validation rejection, not a crash, so nothing should be logged for it. Reproduced this, then picked a category on both rows and confirmed the save succeeds and the rows land in the DB (just outside Home's default 7-day filter, since the sample receipt's own date is 2023-10-01). This matched the user's *first* message, but not this follow-up, where they say the category was already set to "Food" in their environment.
+
+**Audited every `catch` in `lib/` and `app/` for ones that could discard a real exception without a trace** (`grep -rn "^\s*} catch {"`). Every one of them turned out to be an expected, non-error branch (invalid-date parsing, expired/invalid JWT, the AI response failing to parse as JSON) **except one**: `app/(app)/receipt/review/actions.ts`'s `saveBatchAction`, whose `catch { return { ok: false, error: BATCH_FAILURE_ERROR } }` discards whatever `createManyExpenses` actually threw — a real DB-level failure (e.g. `assertCategoriesOwnedByUser` throwing "Category not found" if a row's category id doesn't belong to the user by save time) — and returns the same generic message a routine validation rejection would, with no `rowErrors`. Because the exception is caught here, it never reaches `onRequestError`, so it was invisible to the logging added in the previous entry — exactly the gap that would explain the user's report on their own server.
+
+**Fix:** that `catch` block now calls `logError(error, { action: "saveBatchAction", userId: session.userId })` before returning the same user-facing message. Confirmed by test — see below — that the log it writes resolves the real cause (`"Category not found"`, with the full stack through `assertCategoriesOwnedByUser` → `createManyExpenses` → `saveBatchAction`).
+
+**Test:** extended `app/(app)/receipt/review/actions.test.ts`'s existing "rolls back the whole batch on a DB-level failure" case to also assert exactly one new log line appears with `action: "saveBatchAction"`, the correct `userId`, and a message — locking in that this specific blind spot stays logged.
+
+**Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (173 tests), `npm run build`, and `npx playwright test tests/e2e/receipt.spec.ts tests/e2e/settings.spec.ts` (9 tests) all green.
+
+---

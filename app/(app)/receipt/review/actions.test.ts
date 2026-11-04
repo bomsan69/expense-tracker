@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { signSessionToken } from "@/lib/auth/session";
 import { createCategory } from "@/lib/queries/categories";
 import { countExpenses } from "@/lib/queries/expenses";
@@ -8,6 +10,16 @@ import {
   createMockRedirect,
 } from "@/lib/test-support/next-mocks";
 import { todayIso } from "@/lib/dates";
+
+function todaysLogLines(): string[] {
+  const date = new Date().toISOString().slice(0, 10);
+  const path = join(process.cwd(), "logs", `${date}.log`);
+  try {
+    return readFileSync(path, "utf8").trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 const cookieJar = createMockCookieJar();
 const mockRedirect = vi.fn(createMockRedirect());
@@ -95,11 +107,12 @@ describe("saveBatchAction", () => {
     ).toBe(0);
   });
 
-  it("rolls back the whole batch on a DB-level failure, preserving nothing written", async () => {
+  it("rolls back the whole batch on a DB-level failure, preserving nothing written, and logs the real cause", async () => {
     const other = await createTestUser();
     const otherCategory = await createCategory(other.id, "Not yours");
     if (!otherCategory.ok) throw new Error("setup failed");
 
+    const linesBefore = todaysLogLines().length;
     const result = await saveBatchAction([
       {
         spentOn: todayIso(),
@@ -121,6 +134,16 @@ describe("saveBatchAction", () => {
     expect(
       await countExpenses(userId, { from: todayIso(), to: todayIso() }),
     ).toBe(0);
+
+    // The generic message above is all the user sees — this is the only
+    // trail of what actually went wrong.
+    const newLines = todaysLogLines().slice(linesBefore);
+    expect(newLines).toHaveLength(1);
+    const entry = JSON.parse(newLines[0] as string);
+    expect(entry.action).toBe("saveBatchAction");
+    expect(entry.userId).toBe(userId);
+    expect(typeof entry.message).toBe("string");
+
     await deleteTestUser(other.id);
   });
 
