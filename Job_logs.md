@@ -8,6 +8,17 @@
 - `.gitignore` — `tests/costco_recepit.jpeg`(재현에 쓴 실제 영수증 사진, EXIF에 GPS 위치 포함) 추가 제외 — public 저장소에 개인 위치정보 노출 방지, 로컬에만 유지
 - `BUILD_LOG.md` — 결함 원인 분석 및 수정 내역 기록
 
+### 서버 에러 로깅 시스템 추가
+- `instrumentation.ts` 신규 생성 — Next.js `onRequestError` 훅으로 렌더링/라우트 핸들러/Server Action/미들웨어 에러를 전부 포착 (Edge 런타임에서는 동적 import로 fs 모듈 번들링 회피)
+- `lib/logging/error-log.ts` 신규 생성 — `logs/YYYY-MM-DD.log`에 에러 1건당 JSON 한 줄 기록(timestamp/message/stack/안전한 context만, 헤더·쿠키·요청본문은 절대 기록 안 함), 로깅 실패가 요청을 죽이지 않도록 전체 try/catch
+- `lib/logging/error-log.test.ts` 신규 생성 — 정상 기록/비-Error 값 처리/다중 기록/디렉터리 생성 실패 시에도 미throw 검증
+- `logs/.gitkeep` 추가 — 폴더는 저장소에 유지, 실제 로그 파일은 `.gitignore`로 제외
+- `Dockerfile` — 런타임 스테이지에서 `logs/` 생성 후 비루트 `nextjs` 유저로 chown (쓰기 권한 확보)
+- `docker-compose.yml` — `app` 서비스에 `./logs:/app/logs` 볼륨 마운트 추가 (호스트에서 직접 로그 확인 가능)
+- `.gitignore`, `.dockerignore` — 로그 파일/폴더 관련 규칙 추가
+- `SPEC.md` §10(파일 트리), §12(운영 규칙) — 로깅 시스템 반영
+- 실제로 DB 연결을 끊어 서버 에러를 재현하고 `logs/` 파일에 정상 기록되는 것을 직접 확인
+
 ## 2026-11-03
 
 ### Docker 포트 매핑 변경

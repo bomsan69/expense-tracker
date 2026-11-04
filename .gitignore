@@ -50,3 +50,8 @@ next-env.d.ts
 # local test fixtures with real personal photo data (e.g. EXIF GPS) —
 # never committed to this public repo
 tests/costco_recepit.jpeg
+
+# daily server error logs (lib/logging/error-log.ts) — generated at
+# runtime, never committed; the folder itself is kept via logs/.gitkeep
+/logs/*
+!/logs/.gitkeep

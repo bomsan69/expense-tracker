@@ -24,6 +24,9 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Writable by the non-root user below, so lib/logging/error-log.ts can
+# create logs/YYYY-MM-DD.log at runtime.
+RUN mkdir -p logs && chown nextjs:nodejs logs
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000

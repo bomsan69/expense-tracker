@@ -37,6 +37,8 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     ports:
       - "3400:3000"
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy

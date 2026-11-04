@@ -328,3 +328,23 @@ Reported by the user as "a server error in the real environment" when scanning `
 **Not committed:** `tests/costco_recepit.jpeg` itself was kept out of the repo (`.gitignore`) — its EXIF contains real GPS coordinates, and this is a public repo. The regression test above uses a synthetic buffer instead, so the fix is still covered without that file needing to exist.
 
 ---
+
+## Post-launch addition — server error logging to `logs/YYYY-MM-DD.log`
+
+Requested directly by the user: a way to find the cause when a server error happens in production, prompted by the body-size-limit defect above (which currently only surfaces to the user as a generic 500).
+
+**Change:**
+- `instrumentation.ts` (new, project root) — exports `onRequestError`, the Next.js-native hook (stable since 15.0.0) that fires for every server-side error Next.js catches: Server Component render errors, Route Handler errors, Server Action errors, and proxy/middleware errors (`context.routeType`). Guards on `process.env.NEXT_RUNTIME === "edge"` and dynamically `import()`s the logger rather than importing it statically, since this file is also compiled for the Edge runtime (`middleware.ts` runs there per its own comment, and the Edge runtime has no `fs`) — a static top-level import would have pulled `node:fs` into that bundle and broken it.
+- `lib/logging/error-log.ts` (new) — `logError(error, context?)`: one JSON line per error (`timestamp`, `message`, `stack`, plus whatever non-secret `context` the caller passes), appended to `logs/<today's ISO date>.log`, creating the directory if needed. Wrapped in try/catch that swallows failures — a logging bug must never take down the request it's trying to diagnose. `instrumentation.ts` passes only `request.path`, `request.method`, and `context.routeType` — deliberately never `request.headers` (which carries the session cookie) or any request body, per the existing "never logged" security principles (`SPEC.md` §9).
+- `logs/` (new, gitignored except `.gitkeep`) — the folder now exists in the repo per the request, but its contents are never committed (runtime-generated, and could contain stack traces with local file paths).
+- `Dockerfile` — `logs/` created and `chown`'d to the non-root `nextjs` user in the runtime stage (the `WORKDIR` itself is root-owned, so without this the app couldn't create the directory at runtime).
+- `docker-compose.yml` — `app` service mounts `./logs:/app/logs`, so log files are readable from the host without `docker exec`, matching how `mysql-data` is already handled for the database. This is local file logging only — `SPEC.md` §12's existing "log shipping" exclusion is untouched.
+- `SPEC.md` §10 (file tree) and §12 (operational rules) updated to document all of the above.
+
+**Verified by deliberately reproducing a real error**, not just by inspection: ran the dev server against an intentionally unreachable `DATABASE_URL`, hit `/settings` to trigger the exact "connect ECONNREFUSED" failure seen earlier in this log, and confirmed `logs/2026-11-04.log` was created with a single correct JSON line (timestamp, full message/stack, `path: "/settings"`, `method: "GET"`, `routeType: "render"` — no headers, no cookie, no secret).
+
+**Tests:** `lib/logging/error-log.test.ts` (new) — covers: writes one correctly-shaped line; stringifies a non-`Error` thrown value instead of crashing; appends multiple entries to the same day's file; never throws even when the log directory can't be created (simulated by occupying `logs` with a plain file).
+
+**Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (173 tests, up from 169), `npm run build`, and a full `npx playwright test` run (50 tests) all green. Two unrelated pre-existing flakes (`a11y.spec.ts` SCR-03, `responsive.spec.ts` /stats at 320px — both dev-server cold-start timing) reproduced on a clean run and passed individually on retry; neither touches anything this change modified.
+
+---

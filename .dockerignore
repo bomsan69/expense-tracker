@@ -29,3 +29,6 @@ CLAUDE.md
 
 .DS_Store
 npm-debug.log*
+
+# local dev error logs — the runtime image creates its own empty logs/ dir
+logs/

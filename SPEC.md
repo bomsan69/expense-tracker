@@ -480,6 +480,8 @@ lib/
   queries/expenses.ts  queries/categories.ts  queries/stats.ts  queries/settings.ts
   validation/expense.ts  validation/auth.ts  validation/category.ts  validation/settings.ts
   ai/parse-receipt.ts  ai/verify-ai-settings.ts
+  logging/error-log.ts                # daily logs/YYYY-MM-DD.log, no secrets
+instrumentation.ts                     # onRequestError → lib/logging/error-log.ts
 middleware.ts
 tests/e2e/
 drizzle.config.ts
@@ -488,6 +490,7 @@ Dockerfile                            # multi-stage production image (§12)
 .dockerignore
 docker-compose.yml                    # app + migrate + mysql (§12)
 docker/init.sql                       # creates both databases on first boot
+logs/                                 # gitignored; mounted as a volume in docker-compose (§12)
 ```
 
 Build **one reusable authenticated shell**; never duplicate navigation per page. Prefer semantic shared component variants over per-page hardcoded classes.
@@ -547,6 +550,7 @@ From deck slide 15 (State Matrix) plus the design handoff's validation checklist
 ### Operational rules
 
 - **Migrations never run on container start.** They are the `migrate` service, invoked deliberately (`docker compose run --rm migrate`). Running them from the app's entrypoint would let two replicas race to mutate the schema.
+- **Server errors are logged locally** via `instrumentation.ts`'s `onRequestError` → `lib/logging/error-log.ts`, one JSON line per error in `logs/YYYY-MM-DD.log` (timestamp, message, stack, request path/method — never headers, cookies, or bodies, which can carry the session token or a user's AI API key). `docker-compose.yml` mounts `./logs:/app/logs` so the files are readable from the host; this is local file logging only, not the log shipping excluded below.
 - Secrets are supplied by `.env` (gitignored) or the host's own secret mechanism. `.env.example` carries names only.
 - MySQL's port is bound to `127.0.0.1`, not `0.0.0.0` — the database is not reachable from outside the host.
 - **Out of scope for v1.0:** registry publishing, an orchestrator, TLS termination, multi-replica scaling, and log shipping. TLS and the public hostname are the operator's reverse proxy, not this repo's concern.
