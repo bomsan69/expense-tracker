@@ -1,5 +1,13 @@
 # Job Logs
 
+## 2026-11-04
+
+### 실제 휴대폰 사진(1MB 초과) 영수증 스캔 500 에러 수정
+- `next.config.ts` — `experimental.serverActions.bodySizeLimit: "10mb"` 추가 (Next.js 기본 1MB 제한이 앱 자체의 10MB 업로드 검증보다 먼저 막아서 발생한 500 에러 "Body exceeded 1 MB limit" 수정)
+- `tests/e2e/receipt.spec.ts` — 1MB 초과 파일 업로드 회귀 테스트 추가
+- `.gitignore` — `tests/costco_recepit.jpeg`(재현에 쓴 실제 영수증 사진, EXIF에 GPS 위치 포함) 추가 제외 — public 저장소에 개인 위치정보 노출 방지, 로컬에만 유지
+- `BUILD_LOG.md` — 결함 원인 분석 및 수정 내역 기록
+
 ## 2026-11-03
 
 ### Docker 포트 매핑 변경

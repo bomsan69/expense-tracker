@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
   // AGENTS.md here is the project's hand-authored agent canon; don't let
   // `next dev` append its own generated block to it on every run.
   agentRules: false,
+  experimental: {
+    serverActions: {
+      // Next's own default (1 MB) is well under the 10 MB receipt-upload
+      // limit this app already validates in parseReceiptAction — without
+      // this, every phone photo past 1 MB fails with "Body exceeded 1 MB
+      // limit" before that validation ever runs.
+      bodySizeLimit: "10mb",
+    },
+  },
   turbopack: {
     rules: {
       "*.css": {

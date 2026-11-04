@@ -308,3 +308,23 @@ Also added, per explicit request: a **Verify** button on SCR-05 Settings (`lib/a
 **Manually verified in a real browser** against the user's own test OpenAI credentials (`.env.local`'s `TEST_OPENAI_API_KEY` / `TEST_AI_MODEL`), entered directly into the Settings form and checked with the live Verify button — see the session notes for the result at the time of this change.
 
 ---
+
+## Post-launch defect — real phone photos (>1 MB) failed receipt scanning with a 500
+
+Reported by the user as "a server error in the real environment" when scanning `tests/costco_recepit.jpeg`, a real 1.2 MB iPhone photo.
+
+**Root cause:** Next.js caps a Server Action's request body at **1 MB by default**. This app already validates receipt uploads up to **10 MB** (`MAX_RECEIPT_IMAGE_BYTES` in `app/(app)/expenses/new/actions.ts`, per `SPEC.md` §8.1), but `next.config.ts` never raised the framework's own limit to match, so any upload over 1 MB — i.e. almost any real phone photo — was rejected by Next.js itself ("Body exceeded 1 MB limit") before `parseReceiptAction`'s own size check ever ran.
+
+**Confirmed by direct reproduction, not inspection alone:**
+1. Called `parseReceipt()` directly (bypassing the HTTP layer entirely) against the real `tests/costco_recepit.jpeg` with the user's real `TEST_OPENAI_API_KEY`/`TEST_AI_MODEL` — succeeded, returning 8 correctly-parsed line items. This ruled out the AI call itself, the image content, or the model as the cause.
+2. Uploaded the same file through the actual running app in a real browser (Playwright) — reproduced the exact failure: a 500 with console error `Error: Body exceeded 1 MB limit. To configure the body size limit for Server Actions, see: .../serverActions#bodySizeLimit`.
+
+**Fix:** added `experimental.serverActions.bodySizeLimit: "10mb"` to `next.config.ts`, matching the existing 10 MB application-level check. Re-ran the same browser upload after the fix — now reaches `/receipt/review` with all 8 items, no error.
+
+**Regression test added:** `tests/e2e/receipt.spec.ts` — a new case uploads a synthetic >1 MB file (content doesn't matter, only size) and asserts it still reaches `/receipt/review`, so this specific defect can't silently come back if the config line is ever removed.
+
+**Verification:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (169 tests), full `npx playwright test` (50 tests, including the new one), and `npm run build` all green after the fix.
+
+**Not committed:** `tests/costco_recepit.jpeg` itself was kept out of the repo (`.gitignore`) — its EXIF contains real GPS coordinates, and this is a public repo. The regression test above uses a synthetic buffer instead, so the fix is still covered without that file needing to exist.
+
+---

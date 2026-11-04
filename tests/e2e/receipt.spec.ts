@@ -81,6 +81,35 @@ test.describe("receipt import", () => {
     await expect(page).toHaveURL("/expenses/new");
   });
 
+  test("a real-world-sized photo (>1MB) past Next's default Server Action body limit still uploads", async ({
+    page,
+  }) => {
+    // Regression test: Next.js defaults a Server Action's request body to a
+    // 1 MB limit, well under this app's own 10 MB upload check — without
+    // `experimental.serverActions.bodySizeLimit` in next.config.ts, every
+    // phone photo past 1 MB failed with "Body exceeded 1 MB limit" before
+    // that check ever ran. Content doesn't matter, only size.
+    const LARGE_JPEG = Buffer.concat([
+      TINY_JPEG,
+      Buffer.alloc(2 * 1024 * 1024 - TINY_JPEG.length, 0),
+    ]);
+
+    await setAiSettingsDirect(userId, "gpt-4o-mini", MOCK_SUCCESS_KEY);
+    await login(page);
+    await page.goto("/expenses/new");
+    await settle(page);
+
+    const albumInput = page.locator('input[type="file"]:not([capture])');
+    await albumInput.setInputFiles({
+      name: "large-receipt.jpg",
+      mimeType: "image/jpeg",
+      buffer: LARGE_JPEG,
+    });
+
+    await page.waitForURL("/receipt/review");
+    await expect(page.getByText("Milk")).toBeVisible();
+  });
+
   test("a stubbed provider failure offers retry or manual entry", async ({
     page,
   }) => {

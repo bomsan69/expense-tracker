@@ -46,3 +46,7 @@ next-env.d.ts
 /playwright-report/
 /playwright/.cache/
 /.playwright-mcp/
+
+# local test fixtures with real personal photo data (e.g. EXIF GPS) —
+# never committed to this public repo
+tests/costco_recepit.jpeg
