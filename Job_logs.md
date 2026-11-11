@@ -1,5 +1,22 @@
 # Job Logs
 
+## 2026-11-10
+
+### 카드/은행 거래내역 스크린샷에서 `gpt-6.1-sol`이 항목을 0개로 반환하던 문제 수정
+- 배포 서버(`/home/ai/project/expense-tracker`)에서 `tests/screen_capture.png`(카드 사용내역 캡처) 업로드 시 "No expense items were found" 재현 → 원인 조사 중 운영 서버의 로그 디렉터리가 호스트 바인드 마운트(`./logs:/app/logs`) 때문에 컨테이너의 `nextjs`(uid 1001) 유저가 쓰기를 못 해 `logError`가 전부 조용히 삼켜지고 있던 것 발견, 호스트 `logs/` 디렉터리 권한을 고쳐 로그가 남도록 조치
+- 그 로그로 실제 원인 확인: `gpt-6.1-sol`이 `models.retrieve`로는 유효한 모델이지만, 이 이미지에서 `{"items": []}`를 반환 — 기존 프롬프트가 "a photo of a retail receipt"로만 명시해 카드 거래내역 스크린샷을 받으면 "영수증이 아니다"로 판단해 0개를 반환하는 것으로 보임 (같은 이미지로 `gpt-4o-mini`는 정상 인식)
+- `lib/ai/parse-receipt.ts` — `RECEIPT_PROMPT`를 "retail receipt" 단일 케이스에서 "retail receipt 또는 card/bank transaction history" 두 케이스를 모두 다루도록 확장, "merchant" 필드 의미를 케이스별로 명시(영수증=품목명, 거래내역=해당 거래의 merchant/payee명). JSON 출력 스키마·다운스트림 파싱 로직은 변경 없음
+- 수정 전/후 실제 모델·실제 이미지로 직접 재검증: `screen_capture.png`는 `gpt-6.1-sol` 기준 0개→5개, `costco_recepit.jpeg`(기존 케이스)는 양쪽 모델 모두 8개 유지(회귀 없음), `gpt-4o-mini`도 두 이미지 모두 회귀 없음
+- `npm run verify` — typecheck/lint/vitest(176 tests) 통과. 일부 컴포넌트 테스트 파일(jsdom 환경)이 `html-encoding-sniffer`/`@exodus/bytes` 간 기존 ESM/CJS 상호운용 문제로 워커 시작에 실패하는 현상을 별도로 발견했으나, 이번 변경(프롬프트 텍스트 한 곳)과는 무관한 기존 환경 이슈로 손대지 않음
+
+### 배포 서버 로그 쓰기 권한 문제의 재발 방지 (근본 수정)
+- 위 항목에서 운영 서버에 적용한 `chown`은 임시 조치였음 — `./logs:/app/logs` 바인드 마운트가 매번 `Dockerfile`의 `chown nextjs:nodejs`를 덮어쓰는 구조적 문제라 재배포·새 호스트에서 재발 가능
+- `docker-compose.yml` — `app` 서비스에 `user: "1001:1001"` 명시 추가 (Dockerfile의 `nextjs` 유저 UID와 고정적으로 일치시켜, 이미지가 바뀌어도 호스트에서 맞춰야 할 UID가 항상 동일하도록 보장)
+- `README.md` — Deployment 섹션에 최초 배포 시 1회 필요한 `mkdir -p logs && chown 1001:1001 logs` 안내 추가
+- `SPEC.md` §12 운영 규칙 — 위 내용 반영
+- 로컬에서 `docker compose up -d --build app`으로 재검증: `user: 1001:1001` 적용 후 컨테이너 내부 `whoami` → `nextjs`, `/app/logs` 쓰기 가능 확인
+- 검증 중 별개로 발견(미수정, 범위 밖): 로컬·배포 서버 모두 `app` 컨테이너가 `unhealthy` — healthcheck의 `wget http://localhost:3000`이 `Connection refused`. 이번 변경 전부터 있던 기존 문제로 확인(운영 서버 최초 점검 때도 동일 증상), 로그 권한 문제와는 무관
+
 ## 2026-11-04
 
 ### 실제 휴대폰 사진(1MB 초과) 영수증 스캔 500 에러 수정

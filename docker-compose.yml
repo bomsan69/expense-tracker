@@ -31,6 +31,11 @@ services:
       context: .
       target: runtime
     restart: unless-stopped
+    # Pinned to match the Dockerfile's `nextjs` user explicitly, rather than
+    # relying on whatever `USER` the image happens to have — so the host's
+    # bind-mounted ./logs directory has one fixed UID to be chowned to,
+    # across rebuilds and redeploys (see README's Deployment section).
+    user: "1001:1001"
     environment:
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/expense_tracker
       SESSION_SECRET: ${SESSION_SECRET}

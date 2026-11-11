@@ -42,15 +42,19 @@ function failure(error: ParseReceiptFailure): ParseReceiptResult {
   return { ok: false, error, message: FAILURE_MESSAGES[error] };
 }
 
-const RECEIPT_PROMPT = `You are reading a photo of a retail receipt. List every purchased line item.
-Exclude tax, tip, subtotal, and total lines entirely — they are not line items.
+const RECEIPT_PROMPT = `You are reading a photo or screenshot of a purchase record. It may be a
+retail receipt (list every purchased line item) or a card/bank transaction history (list every
+separate transaction). Exclude tax, tip, subtotal, and total lines entirely — they are not
+purchases.
 Respond with only JSON, no prose, in this exact shape:
 {"items": [{"date": "YYYY-MM-DD", "merchant": "string", "amount": "12.99"}]}
-Use the receipt's own date for every item. "merchant" is that line item's own name or
-description as printed on the receipt (e.g. "Milk", "Coffee"), not the store's name —
-each item gets its own row, so repeating the store name for every row is not useful.
-"amount" is the line item's price as a decimal string with at most 2 decimal places.
-If you cannot find any purchased line items, respond with {"items": []}.`;
+Use each entry's own date: the receipt's date for every line item on a single receipt, or each
+transaction's own date on a transaction history. "merchant" is that entry's own name as
+printed: on a receipt, the purchased item's name or description (e.g. "Milk", "Coffee"), not
+the store's name, since repeating the store name on every row is not useful; on a transaction
+history, the transaction's own merchant or payee name.
+"amount" is that entry's price as a decimal string with at most 2 decimal places.
+If you cannot find any purchases or transactions, respond with {"items": []}.`;
 
 const receiptResponseSchema = z.object({
   items: z.array(

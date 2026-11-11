@@ -61,6 +61,15 @@ The E2E suite expects a migrated and seeded `TEST_DATABASE_URL`, and runs at the
 
 A single host running Docker. No other deployment path is supported.
 
+Before the first `docker compose up` on a host, create the log directory and
+own it by the `app` container's fixed UID (`docker-compose.yml`'s `user:
+"1001:1001"`) — otherwise the bind mount shadows the image's own permissions
+and `logs/YYYY-MM-DD.log` silently fails to write:
+
+```bash
+mkdir -p logs && chown 1001:1001 logs
+```
+
 ```bash
 docker compose up -d --build        # app + mysql
 docker compose run --rm migrate     # one-shot: migrate then seed
