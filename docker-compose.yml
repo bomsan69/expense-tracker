@@ -46,6 +46,11 @@ services:
       # single OpenAI-shaped client either way — no provider abstraction
       # layer (SPEC.md §4 D5).
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      # Next's standalone server binds to whatever HOSTNAME holds, and Docker
+      # sets that to the container id - so it listened only on the container's
+      # own IP, leaving loopback closed and the healthcheck below permanently
+      # refused even though the published port worked fine.
+      HOSTNAME: "0.0.0.0"
     ports:
       - "3400:3000"
     volumes:

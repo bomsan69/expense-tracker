@@ -70,9 +70,39 @@ and `logs/YYYY-MM-DD.log` silently fails to write:
 mkdir -p logs && chown 1001:1001 logs
 ```
 
+First install:
+
 ```bash
 docker compose up -d --build        # app + mysql
 docker compose run --rm migrate     # one-shot: migrate then seed
+```
+
+Upgrading an existing host — **the order matters, and `migrate` must be rebuilt**:
+
+```bash
+git pull
+docker compose build migrate        # REQUIRED: see the warning below
+docker compose run --rm migrate     # apply new migrations first
+docker compose up -d --build app    # then restart the app on the new code
+```
+
+> **`docker compose run` does not rebuild the image.** It reuses whatever
+> `migrate` image already exists, so after a `git pull` it runs the *old*
+> source — drizzle-kit then sees only the migrations baked into that stale
+> image, finds nothing new, and prints `migrations applied successfully`
+> while applying nothing at all. A silent no-op, not an error. Always
+> `docker compose build migrate` first.
+>
+> Migrate **before** restarting the app, not after: migrations here are
+> additive, so the running old code is unaffected by a new column, whereas
+> new code against an un-migrated schema fails every query
+> (`Unknown column ... in 'field list'`) until the migration lands.
+
+Verify the migration actually applied, rather than trusting the message:
+
+```bash
+docker compose exec mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" \
+  -e "SELECT id FROM expense_tracker.__drizzle_migrations ORDER BY id;"
 ```
 
 The app serves on `http://localhost:3000`. MySQL's port is bound to `127.0.0.1` only — it is not reachable from outside the host.

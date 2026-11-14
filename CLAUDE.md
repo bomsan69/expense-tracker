@@ -89,9 +89,20 @@ npm run db:seed          # seed dev user + default categories
 Deployment (`SPEC.md §12`):
 
 ```bash
-docker compose up -d --build        # app + mysql in containers
+docker compose up -d --build        # first install: app + mysql in containers
 docker compose run --rm migrate     # one-shot: migrate then seed
 docker compose down                 # stop (named volume survives)
+```
+
+Upgrading a host that already runs this app — **`docker compose run` reuses a
+stale image**, so without the `build` step drizzle-kit reports
+`migrations applied successfully` having applied nothing:
+
+```bash
+git pull
+docker compose build migrate        # REQUIRED — without it the migration is a silent no-op
+docker compose run --rm migrate     # migrate BEFORE restarting the app
+docker compose up -d --build app
 ```
 
 Definition of done for the whole project: see `FLOW.md § Project definition of done`.

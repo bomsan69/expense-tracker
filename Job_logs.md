@@ -1,5 +1,26 @@
 # Job Logs
 
+## 2026-11-14 (2) — 배포 장애 대응
+
+### 배포 후 전 페이지 500 — 마이그레이션이 "성공"하고도 적용되지 않던 문제
+- 증상: 운영 서버 배포 후 전 페이지 500. `docker compose logs app`에서 `Unknown column 'person' in 'field list'` (ER_BAD_FIELD_ERROR, errno 1054) 확인 — 새 코드는 `person`을 조회하는데 DB에 컬럼 없음
+- **1차 원인**: 앱만 새 코드로 재빌드되고 마이그레이션이 적용되지 않음. `__drizzle_migrations`에 `0000`만 존재
+- **2차 원인(핵심)**: `docker compose run --rm migrate`를 실행하면 `migrations applied successfully`가 출력되는데도 실제로는 아무것도 적용되지 않음. **`docker compose run`은 이미지를 재빌드하지 않고 기존 이미지를 재사용**하므로, `git pull` 이후에도 구버전 소스가 담긴 이미지로 실행됨 → 이미지 내부 `db/migrations/`에 `0000`만 있어 drizzle-kit이 "적용할 것 없음"으로 판단하고 정상 종료. 조용한 no-op이라 에러로 드러나지 않음
+- 호스트/이미지 내부 `db/migrations/` 목록을 직접 비교해 확정 (호스트: 0000+0001, 이미지: 0000만)
+- **조치**: 작업 전 `mysqldump` 선백업(`backups/expense_tracker_20261114_104146.sql`) → `docker compose build migrate` → `docker compose run --rm migrate` → `docker compose restart app`
+- **결과**: `person enum('husband','wife') NOT NULL DEFAULT 'husband'` 생성, 마이그레이션 id 1·2 적용, **운영 데이터 64건 전부 보존**(합계 111038 minor, 전부 husband). `/login` 200, `/` 307, DB 에러 0건
+
+### 배포 절차 문서 보강 (같은 장애 재발 방지)
+- `README.md` — Deployment 섹션을 "최초 설치"와 "기존 호스트 업그레이드"로 분리. 업그레이드 절차에 `docker compose build migrate` 단계 추가, `run`이 재빌드하지 않아 조용한 no-op이 되는 함정과 "마이그레이션 먼저 → 앱 재시작" 순서 이유(가산적 변경이라 구코드는 새 컬럼에 영향 없음 / 신코드는 미적용 스키마에서 전 쿼리 실패)를 경고 블록으로 명시. 메시지를 믿지 말고 `__drizzle_migrations`를 직접 확인하는 검증 명령도 추가
+- `CLAUDE.md` — Quick command reference의 Deployment 블록에 동일 업그레이드 절차 추가
+- `SPEC.md` §12 — 마이그레이션 운영 규칙에 재빌드 필요성과 적용 순서 근거 반영
+
+### app 컨테이너가 계속 unhealthy 였던 기존 문제 수정 (원인 규명)
+- 11/10 로그에 "원인 미상, 범위 밖"으로 남겨뒀던 건. 컨테이너 내부에서 `netstat`로 확인한 결과 `LISTEN 172.18.0.3:3000` — **컨테이너 IP에만 바인딩**되어 루프백이 닫혀 있었음. 그래서 헬스체크의 `wget http://localhost:3000`이 Connection refused (localhost·127.0.0.1 둘 다 실패, IPv6 문제 아님). 외부 포트 매핑은 컨테이너 IP로 가므로 서비스 자체는 정상이었던 것
+- 원인: Next.js standalone `server.js`가 `HOSTNAME` 환경변수를 바인딩 주소로 사용하는데, **Docker가 이 변수를 컨테이너 ID로 자동 설정**(`HOSTNAME=b471e61e253d`)하여 해당 호스트명이 가리키는 컨테이너 IP에만 묶임
+- `docker-compose.yml` — `app` 서비스 환경변수에 `HOSTNAME: "0.0.0.0"` 추가. `docker compose config`로 반영 확인
+- `npm run verify` 통과 (40파일 256 tests)
+
 ## 2026-11-14
 
 ### 부부 공동 가계부 — 지출 등록자(남편/부인) 구분 기능 (SPEC D11)
