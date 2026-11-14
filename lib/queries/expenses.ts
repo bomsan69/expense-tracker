@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, inArray, lte, sum } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, expenses } from "@/db/schema";
-import type { ExpenseInput } from "@/lib/validation/expense";
+import type { ExpenseInput, Person } from "@/lib/validation/expense";
 
 export type Expense = typeof expenses.$inferSelect;
 
@@ -9,6 +9,8 @@ export interface ExpenseFilter {
   from: string;
   to: string;
   categoryId?: number;
+  /** Omitted means the whole household (D11). */
+  person?: Person;
 }
 
 const PAGE_SIZE = 10;
@@ -21,6 +23,9 @@ function whereCondition(userId: number, filter: ExpenseFilter) {
   ];
   if (filter.categoryId !== undefined) {
     conditions.push(eq(expenses.categoryId, filter.categoryId));
+  }
+  if (filter.person !== undefined) {
+    conditions.push(eq(expenses.person, filter.person));
   }
   return and(...conditions);
 }
@@ -80,6 +85,31 @@ export async function sumExpenses(
   return Number.parseInt(row?.value ?? "0", 10);
 }
 
+export interface PersonTotals {
+  husbandMinor: number;
+  wifeMinor: number;
+}
+
+/** The per-person split of `sumExpenses` over the identical condition, so the
+ * two halves always add up to the total shown beside them (§5 invariant). */
+export async function sumExpensesByPerson(
+  userId: number,
+  filter: ExpenseFilter,
+): Promise<PersonTotals> {
+  const rows = await db
+    .select({ person: expenses.person, value: sum(expenses.amountMinor) })
+    .from(expenses)
+    .where(whereCondition(userId, filter))
+    .groupBy(expenses.person);
+  const byPerson = new Map(
+    rows.map((row) => [row.person, Number.parseInt(row.value ?? "0", 10)]),
+  );
+  return {
+    husbandMinor: byPerson.get("husband") ?? 0,
+    wifeMinor: byPerson.get("wife") ?? 0,
+  };
+}
+
 export async function findDuplicateExpense(
   userId: number,
   spentOn: string,
@@ -123,6 +153,7 @@ export async function createExpense(
     merchant: input.merchant,
     amountMinor: input.amountMinor,
     notes: input.notes ?? null,
+    person: input.person,
   });
   const created = await getExpenseById(userId, result.insertId);
   if (!created) {
@@ -149,6 +180,7 @@ export async function updateExpense(
       merchant: input.merchant,
       amountMinor: input.amountMinor,
       notes: input.notes ?? null,
+      person: input.person,
     })
     .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
   return getExpenseById(userId, id);
@@ -182,6 +214,7 @@ export async function createManyExpenses(
         merchant: input.merchant,
         amountMinor: input.amountMinor,
         notes: input.notes ?? null,
+        person: input.person,
       });
       const [row] = await tx
         .select()

@@ -41,6 +41,7 @@ beforeEach(async () => {
     categoryId: categoryA,
     merchant: "User A's expense",
     amountMinor: 5000,
+    person: "husband",
   });
   expenseA = expense.id;
 
@@ -51,6 +52,7 @@ beforeEach(async () => {
     categoryId: categoryB,
     merchant: "User B's expense",
     amountMinor: 1,
+    person: "husband",
   });
 });
 
@@ -83,6 +85,7 @@ describe("cross-tenant isolation", () => {
       categoryId: categoryB,
       merchant: "Hijacked",
       amountMinor: 1,
+      person: "husband",
     });
     expect(result).toBeNull();
     // A's row must be untouched.

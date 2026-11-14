@@ -57,7 +57,12 @@ export async function getCategoryIdByName(
 export async function createExpensesDirect(
   userId: number,
   categoryId: number,
-  rows: { spentOn: string; merchant: string; amountMinor: number }[],
+  rows: {
+    spentOn: string;
+    merchant: string;
+    amountMinor: number;
+    person?: "husband" | "wife";
+  }[],
 ): Promise<void> {
   for (const row of rows) {
     await db.insert(schema.expenses).values({ userId, categoryId, ...row });

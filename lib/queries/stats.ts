@@ -43,6 +43,8 @@ export interface MonthlyTotal {
   year: number;
   month: number;
   label: string;
+  husbandMinor: number;
+  wifeMinor: number;
   totalMinor: number;
 }
 
@@ -56,8 +58,8 @@ export async function monthlyTotals(userId: number): Promise<MonthlyTotal[]> {
   return Promise.all(
     months.map(async ({ year, month }) => {
       const { from, to } = monthBounds(year, month);
-      const [row] = await db
-        .select({ value: sum(expenses.amountMinor) })
+      const rows = await db
+        .select({ person: expenses.person, value: sum(expenses.amountMinor) })
         .from(expenses)
         .where(
           and(
@@ -65,12 +67,20 @@ export async function monthlyTotals(userId: number): Promise<MonthlyTotal[]> {
             gte(expenses.spentOn, from),
             lte(expenses.spentOn, to),
           ),
-        );
+        )
+        .groupBy(expenses.person);
+      const byPerson = new Map(
+        rows.map((row) => [row.person, Number.parseInt(row.value ?? "0", 10)]),
+      );
+      const husbandMinor = byPerson.get("husband") ?? 0;
+      const wifeMinor = byPerson.get("wife") ?? 0;
       return {
         year,
         month,
         label: monthLabel(year, month),
-        totalMinor: Number.parseInt(row?.value ?? "0", 10),
+        husbandMinor,
+        wifeMinor,
+        totalMinor: husbandMinor + wifeMinor,
       };
     }),
   );

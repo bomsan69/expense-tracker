@@ -69,6 +69,7 @@ export default async function ExpenseDetailPage({
             merchant: expense.merchant,
             amountMinor: expense.amountMinor,
             notes: expense.notes ?? "",
+            person: expense.person,
           }}
         />
 

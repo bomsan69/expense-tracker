@@ -56,6 +56,7 @@ describe("getExpenseAction", () => {
       categoryId,
       merchant: "Trader Joe's",
       amountMinor: 1000,
+      person: "husband",
     });
     const result = await getExpenseAction(expense.id);
     expect(result).toEqual({ ok: true, data: expense });
@@ -75,6 +76,7 @@ describe("getExpenseAction", () => {
       categoryId: otherCategory.category.id,
       merchant: "Not yours",
       amountMinor: 500,
+      person: "husband",
     });
 
     const result = await getExpenseAction(otherExpense.id);
@@ -90,6 +92,7 @@ describe("updateExpenseAction", () => {
       categoryId,
       merchant: "Original",
       amountMinor: 1000,
+      person: "husband",
     });
     await expect(
       updateExpenseAction(
@@ -100,6 +103,7 @@ describe("updateExpenseAction", () => {
           categoryId: String(categoryId),
           merchant: "Updated",
           amountMinor: "20.00",
+          person: "husband",
         }),
       ),
     ).rejects.toThrow("/");
@@ -114,6 +118,7 @@ describe("updateExpenseAction", () => {
       categoryId,
       merchant: "Original",
       amountMinor: 1000,
+      person: "husband",
     });
     const result = await updateExpenseAction(
       undefined,
@@ -123,6 +128,7 @@ describe("updateExpenseAction", () => {
         categoryId: String(categoryId),
         merchant: "Updated",
         amountMinor: "0",
+        person: "husband",
       }),
     );
     expect(result).toEqual({
@@ -142,6 +148,7 @@ describe("updateExpenseAction", () => {
       categoryId: otherCategory.category.id,
       merchant: "Not yours",
       amountMinor: 500,
+      person: "husband",
     });
 
     const result = await updateExpenseAction(
@@ -152,6 +159,7 @@ describe("updateExpenseAction", () => {
         categoryId: String(categoryId),
         merchant: "Hijacked",
         amountMinor: "1.00",
+        person: "husband",
       }),
     );
     expect(result).toEqual({ ok: false, error: "Expense not found." });
@@ -169,6 +177,7 @@ describe("deleteExpenseAction", () => {
       categoryId,
       merchant: "To delete",
       amountMinor: 100,
+      person: "husband",
     });
     await expect(deleteExpenseAction(expense.id)).rejects.toThrow("/");
     expect(mockRedirect).toHaveBeenCalledWith("/");
@@ -184,6 +193,7 @@ describe("deleteExpenseAction", () => {
       categoryId: otherCategory.category.id,
       merchant: "Not yours",
       amountMinor: 500,
+      person: "husband",
     });
 
     const result = await deleteExpenseAction(otherExpense.id);

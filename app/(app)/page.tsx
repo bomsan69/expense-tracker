@@ -8,6 +8,7 @@ import { SpendingSummary } from "@/components/expenses/spending-summary";
 import { requireSession } from "@/lib/auth/session";
 import { defaultDateRange } from "@/lib/dates";
 import { listCategories } from "@/lib/queries/categories";
+import { personFilterSchema } from "@/lib/validation/expense";
 import { getHomeData, type HomeDataParams } from "./actions";
 
 interface HomePageProps {
@@ -28,6 +29,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const categoryId = result.ok
     ? (result.data.categoryId?.toString() ?? "all")
     : (params.category ?? "all");
+  const person = result.ok
+    ? result.data.person
+    : personFilterSchema.parse(params.person);
 
   const categoryNameById = new Map(
     categories.map((category) => [category.id, category.name]),
@@ -39,6 +43,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <div className="flex-1 px-4 py-6">
         <SpendingSummary
           totalMinor={result.ok ? result.data.totalMinor : 0}
+          personTotals={
+            result.ok
+              ? result.data.personTotals
+              : { husbandMinor: 0, wifeMinor: 0 }
+          }
           from={from}
           to={to}
         />
@@ -47,6 +56,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           from={from}
           to={to}
           categoryId={categoryId}
+          person={person}
           categories={categories}
           error={result.ok ? undefined : result.error}
         />
@@ -79,6 +89,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               from={result.data.from}
               to={result.data.to}
               category={categoryId}
+              person={person}
             />
           </section>
         )}

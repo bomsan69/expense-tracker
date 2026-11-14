@@ -37,6 +37,7 @@ export async function updateExpenseAction(
     merchant: formData.get("merchant"),
     amountMinor: formData.get("amountMinor"),
     notes: formData.get("notes") || undefined,
+    person: formData.get("person") || undefined,
   });
   if (!parsed.success) {
     return {

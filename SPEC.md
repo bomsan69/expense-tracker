@@ -14,7 +14,7 @@ All in-app text is **English**. All Screen IDs below match the source deck exact
 
 ## 1. Users & use cases
 
-**User:** a single authenticated individual recording household expenses. Multi-user *accounts* (sharing a ledger) are out of scope; the system is nonetheless multi-tenant by `user_id` at the data layer (see §5, §9).
+**User:** one authenticated household account, shared by two people — **Husband** and **Wife** (D11). Separate *logins* per person are out of scope: both share one account, and each expense records **who entered it** so the two can be told apart and compared. The system is multi-tenant by `user_id` at the data layer (see §5, §9).
 
 **Core use cases**
 
@@ -120,6 +120,7 @@ The source deck marks 9 items `CONFIRM REQUIRED` / `PROPOSED`, and `expense_trac
 | **D8** | Categories: delete/merge, ordering, rename semantics | **No delete, no merge** (deck SUP-02: "Delete — not requested; omit unless confirmed"). Create and rename only. Ordering is **ascending by label**, case-insensitive. **Category `id` is stable across renames**, so historical expenses follow the new label. Names are unique per user, case-insensitively. |
 | **D9** | Password policy, post-change session behaviour, a11y copy, localisation | **Policy: ≥ 10 characters, at least one letter and one digit**, new ≠ current, new == confirmation. On success, **all other sessions are invalidated** (increment `token_version`) and the current session is re-issued, so the user stays logged in on this device only. Error copy per §8. **No i18n layer** — English string literals in place; single currency, single locale. |
 | **D10** | *(Implementation gap, not in the deck)* How do parsed items survive SCR-04 → SUP-01? | **Client-side `sessionStorage`** under key `receipt_draft`. Chosen over a server-side draft table and over an encrypted cookie: it adds no table and keeps parsed receipt content off the server between parse and save, consistent with D6. SUP-01 with no draft present → redirect to SCR-04. |
+| **D11** | *(Stakeholder request, 2026-11-14)* Two people share the ledger — how is each expense attributed and distinguished? | **One shared account plus a `person` column on `expenses`**, values `husband` \| `wife`, `NOT NULL DEFAULT 'husband'`. Chosen over two logins with a `household_id`, which would re-base the §9.3 isolation model on a new key for no behaviour the request asks for. **Default `husband`** on every entry form. Existing rows adopt `husband` through the column default, so the additive migration preserves them. Husband renders in `--person-husband`, Wife in `--person-wife`; per §6.1 both also carry the text label `Husband` / `Wife`. A receipt batch is attributed **per receipt**, not per line item. Duplicate detection (D4) ignores `person`. The list filter, the home total, and the monthly statistics chart all split by person. |
 
 ---
 
@@ -165,10 +166,11 @@ Indexes: `UNIQUE (user_id, name_normalized)`, `INDEX (user_id, name)`.
 | `merchant` | `VARCHAR(160)` | `NOT NULL`, trimmed, non-empty |
 | `amount_minor` | `BIGINT` | `NOT NULL`, must be `> 0` (enforced in domain + validation) |
 | `notes` | `VARCHAR(500)` | `NULL` |
+| `person` | `ENUM('husband','wife')` | `NOT NULL DEFAULT 'husband'` — who entered the expense (D11) |
 | `created_at` | `TIMESTAMP` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` |
 | `updated_at` | `TIMESTAMP` | `NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` |
 
-Indexes: `INDEX (user_id, spent_on)` (list + range filter), `INDEX (user_id, category_id, spent_on)` (category filter + stats).
+Indexes: `INDEX (user_id, spent_on)` (list + range filter), `INDEX (user_id, category_id, spent_on)` (category filter + stats). **No index on `person`** — a two-person ledger is too small for the residual filter to matter, and an unused index is speculative.
 
 **No `receipts` / `receipt_batches` table** — D6 forbids retaining receipt content, and nothing in the UI reads batch history.
 
@@ -206,6 +208,10 @@ Authority: `expense_tracker_design/`. Reproduced here so the spec is self-contai
 | Input border | `#D1D5DB` | form control boundary |
 | Destructive | `#B91C1C` | deletion and errors only |
 | Destructive background | `#FEF2F2` | destructive surface |
+| Person · Husband | `#111827` | expenses entered by Husband (D11) — same ink as normal text |
+| Person · Wife | `#1D4ED8` | expenses entered by Wife (D11) |
+
+`Person · Wife` is deliberately a **darker blue than Accent**: Accent means "interactive", and reusing it would read as a link. It clears AA on white (6.3:1). Per §6.1 the colour never stands alone — the `Husband` / `Wife` label accompanies it.
 
 Consume these as the semantic Tailwind tokens defined in `globals.css` (`bg-accent`, `text-muted-foreground`, `border-border`, …). **No raw hex in components.** Maintain WCAG 2.2 AA contrast.
 

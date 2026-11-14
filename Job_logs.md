@@ -1,5 +1,38 @@
 # Job Logs
 
+## 2026-11-14
+
+### 부부 공동 가계부 — 지출 등록자(남편/부인) 구분 기능 (SPEC D11)
+- 요구사항: 남편/부인이 함께 사용, 남편 등록분은 검정·부인 등록분은 파랑, 기본값 남편, 기존 데이터 유지. 코딩 전 검토 단계에서 "계정 1개 + 지출별 등록자 컬럼"(채택) vs "로그인 2개 + household 공유"(기각, §9.3 격리 모델 전면 재작성 대비 얻는 것 없음)를 제시해 사용자가 전자를 선택. 라벨은 영어(Husband/Wife), 추가 기능 3종(홈 필터·합계 분리·통계 비교)도 사용자가 선택
+- `SPEC.md` — §2 범위(1인 전용 → 공동 계정), §4에 결정 행 D11 신규, §5 `expenses` 테이블에 `person` 컬럼, §6.2에 Person 색상 역할 2종 추가
+- `db/schema.ts` + `db/migrations/0001_bouncy_vertigo.sql` 신규 — `person enum('husband','wife') NOT NULL DEFAULT 'husband'` 단일 `ADD COLUMN`(파괴적 구문 0건). 적용 전 생성 SQL 검수, 적용 후 기존 6행이 id·금액·날짜 그대로 전부 `husband`로 채워진 것 확인
+- `lib/validation/expense.ts` — `personSchema`(기본값 husband), 목록 필터용 `personFilterSchema`(all 포함, 잘못된 값은 all로 폴백) 추가
+- `lib/queries/expenses.ts` — `ExpenseFilter.person` 추가로 목록·건수·합계가 하나의 동일 조건을 공유, create/update/createMany가 `person` 저장, 합계 분리용 `sumExpensesByPerson` 신규
+- `lib/queries/stats.ts` — `monthlyTotals`가 `groupBy(person)`으로 버킷별 `husbandMinor`/`wifeMinor`/`totalMinor` 반환 (기존 6회 쿼리 구조 유지)
+- `lib/person.ts` 신규 — 라벨·색상 클래스 매핑 단일 정의 (행/폼/필터/합계/차트 5곳에서 공용)
+- `app/globals.css` — `--person-husband`(#111827), `--person-wife`(#1D4ED8, accent와 구분되는 진한 파랑), 어두운 요약 카드 전용 `--person-wife-on-primary`(#93C5FD, 대비 8.15:1) 토큰 추가
+- `components/expenses/expense-form.tsx` — "Entered by" Select 추가(기본 Husband, 수정 시 기존 값)
+- `components/expenses/expense-row.tsx` — 상호·금액에 등록자 색상 적용 + `Husband`/`Wife` 텍스트 라벨 병기(색상 단독 전달 금지, SPEC §6.1)
+- `components/expenses/spending-summary.tsx` — 총액 아래 `Husband $x · Wife $y` 분리 표시
+- `components/expenses/expense-filters.tsx` / `pagination.tsx` — 등록자 필터(Everyone/Husband/Wife) 추가, URL `person` 파라미터로 왕복, 필터 변경 시 1페이지로 리셋
+- `components/charts/monthly-spending.tsx` — 월별 막대를 등록자 누적(stacked)으로 변경(390px에서 grouped는 막대가 너무 얇음), 범례 추가, 접근성 표를 `Month|Husband|Wife|Total`로 확장
+- `lib/receipt-draft.ts` / `receipt-picker.tsx` / `receipt-review-client.tsx` — 영수증 1장당 등록자 1명(기본 Husband)으로 배치 전체에 적용
+- `app/(app)/actions.ts` 외 액션 3종 — `person` 파싱 및 전달, 홈 데이터에 `personTotals` 추가
+- 게이트: `npm run verify` 통과(typecheck/lint 경고0/40파일 256 tests), `npm run build` clean, `npm run test:e2e` 50/50(axe 접근성 포함). 비즈니스 로직은 전부 테스트 우선(red 확인 후 구현). 실제 앱 390×844에서 부인 지출 등록 → 파랑 표시·합계 정합($25.10+$42.30=$67.40)·필터·통계 누적 막대 육안 확인
+
+### 저장 실패 시 선택한 Category가 사라지던 기존 버그 수정
+- 이번 기능과 무관한 기존 결함. Radix Select가 폼 내부에 렌더하는 네이티브 `<select>`의 `defaultValue`가 마운트 시점에 고정되는데, React 19가 `<form action>` 완료 후 폼을 리셋하면서 `onValueChange`를 재발화시켜 React 상태를 덮어씀. Merchant/Amount는 상태에서 복원되어 멀쩡해 보여 그동안 발견되지 않음
+- `components/expenses/expense-form.tsx` — `action` prop 대신 `onSubmit` + `startTransition(formAction)`으로 제출해 리셋 자체가 발생하지 않도록 수정 (`onReset` + `preventDefault`는 React의 리셋이 cancelable 이벤트를 우회해 효과 없음을 먼저 확인)
+- 회귀 테스트 2건 추가(Category·Entered by 각각 저장 실패 후 값 유지)
+
+### 날짜에 의존해 깨져 있던 영수증 E2E 테스트 수정
+- `tests/e2e/receipt.spec.ts` — 모의 영수증 항목이 `2026-10-31` 고정인데 홈 기본 범위가 `today−7`이라, 10/31로부터 8일 내에 실행할 때만 통과하던 상태(2026-11-09부터 실패). 손대지 않은 HEAD를 별도 워크트리에 꺼내 재현해 기존 결함임을 확인
+- 저장 후 해당 항목을 포함하는 범위를 명시해 조회하도록 수정하고, 저장분이 Husband로 귀속되는지 검증도 함께 추가
+- `tests/e2e/db-helpers.ts` — `createExpensesDirect`에 선택적 `person` 지원
+
+### 환경 이슈 확인 (코드 수정 없음)
+- 셸 Node가 v22.2.0인데 `.nvmrc`는 24.22.2 고정. `require(ESM)`이 Node 22.12+부터만 지원되어 jsdom의 `html-encoding-sniffer` → `@exodus/bytes` 체인이 `ERR_REQUIRE_ESM`으로 실패 → **컴포넌트 테스트 16개 파일이 전부 실행 불가**였던 것(11-10자 로그의 "기존 환경 이슈"와 동일 건). 지정 Node로 실행하면 의존성 변경 없이 해결됨을 확인. `package.json`에 `engines` 추가를 권고하나 이번 요청 범위 밖이라 미적용
+
 ## 2026-11-10
 
 ### 카드/은행 거래내역 스크린샷에서 `gpt-6.1-sol`이 항목을 0개로 반환하던 문제 수정

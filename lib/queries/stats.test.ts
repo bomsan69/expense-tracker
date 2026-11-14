@@ -40,12 +40,14 @@ describe("monthlyTotals", () => {
       categoryId: foodId,
       merchant: "A",
       amountMinor: 1000,
+      person: "husband",
     });
     await createExpense(userId, {
       spentOn: monthStartIso(0),
       categoryId: foodId,
       merchant: "B",
       amountMinor: 2000,
+      person: "husband",
     });
     // 3 months ago: 500.
     await createExpense(userId, {
@@ -53,6 +55,7 @@ describe("monthlyTotals", () => {
       categoryId: foodId,
       merchant: "C",
       amountMinor: 500,
+      person: "husband",
     });
     // 7 months ago: out of the 6-bucket window, must not appear anywhere.
     await createExpense(userId, {
@@ -60,6 +63,7 @@ describe("monthlyTotals", () => {
       categoryId: foodId,
       merchant: "D",
       amountMinor: 999_999,
+      person: "husband",
     });
 
     const totals = await monthlyTotals(userId);
@@ -73,6 +77,57 @@ describe("monthlyTotals", () => {
   it("returns 0 for every bucket when there are no expenses", async () => {
     const totals = await monthlyTotals(userId);
     expect(totals.every((t) => t.totalMinor === 0)).toBe(true);
+    expect(
+      totals.every((t) => t.husbandMinor === 0 && t.wifeMinor === 0),
+    ).toBe(true);
+  });
+
+  it("splits each bucket by person, and the halves add up to the bucket (D11)", async () => {
+    // Current month: husband 1000 + 1500 = 2500, wife 400. Total 2900.
+    await createExpense(userId, {
+      spentOn: monthStartIso(0),
+      categoryId: foodId,
+      merchant: "His A",
+      amountMinor: 1000,
+      person: "husband",
+    });
+    await createExpense(userId, {
+      spentOn: monthStartIso(0),
+      categoryId: foodId,
+      merchant: "His B",
+      amountMinor: 1500,
+      person: "husband",
+    });
+    await createExpense(userId, {
+      spentOn: monthStartIso(0),
+      categoryId: travelId,
+      merchant: "Her A",
+      amountMinor: 400,
+      person: "wife",
+    });
+    // 2 months ago: wife only, 700.
+    await createExpense(userId, {
+      spentOn: monthStartIso(2),
+      categoryId: foodId,
+      merchant: "Her B",
+      amountMinor: 700,
+      person: "wife",
+    });
+
+    const totals = await monthlyTotals(userId);
+    const current = totals[5];
+    expect(current?.husbandMinor).toBe(2500);
+    expect(current?.wifeMinor).toBe(400);
+    expect(current?.totalMinor).toBe(2900);
+
+    const twoMonthsAgo = totals[3];
+    expect(twoMonthsAgo?.husbandMinor).toBe(0);
+    expect(twoMonthsAgo?.wifeMinor).toBe(700);
+    expect(twoMonthsAgo?.totalMinor).toBe(700);
+
+    for (const bucket of totals) {
+      expect(bucket.husbandMinor + bucket.wifeMinor).toBe(bucket.totalMinor);
+    }
   });
 });
 
@@ -84,12 +139,14 @@ describe("categoryBreakdownLastMonth", () => {
       categoryId: foodId,
       merchant: "Groceries",
       amountMinor: 3000,
+      person: "husband",
     });
     await createExpense(userId, {
       spentOn: monthStartIso(1),
       categoryId: travelId,
       merchant: "Flight",
       amountMinor: 7000,
+      person: "husband",
     });
     // Current month: must be excluded from "last month".
     await createExpense(userId, {
@@ -97,6 +154,7 @@ describe("categoryBreakdownLastMonth", () => {
       categoryId: foodId,
       merchant: "This month",
       amountMinor: 999_999,
+      person: "husband",
     });
 
     const breakdown = await categoryBreakdownLastMonth(userId);

@@ -402,3 +402,33 @@ The user set `TEST_AI_MODEL` to a model (`gpt-6.1-sol`) and asked for a recognit
 **Gate:** `npm run typecheck`, `npm run lint`, `npx vitest run --project node` (176 tests) × 3 consecutive clean runs, `npm run build`, and `npx playwright test tests/e2e/receipt.spec.ts` (4 tests) all green.
 
 ---
+
+## Post-launch feature — shared household ledger: who entered each expense (D11)
+
+Stakeholder request (2026-11-14): husband and wife should share the app, entries by the husband shown in black and by the wife in blue, default husband, existing data preserved.
+
+**Interpretation, confirmed with the user before coding.** "Default husband" only makes sense if both people share one login — with separate logins the entering person is implicit. Confirmed: **one shared account plus a `person` column on `expenses`** (`SPEC.md` D11), not two logins with a `household_id`. The runner-up would have re-based the whole §9.3 isolation model on a new key to deliver nothing the request asked for. The user also chose English labels (`Husband` / `Wife`, consistent with D9's single-locale rule) and asked for three additions beyond colour: a person filter on Home, a per-person split of the Home total, and a per-person comparison on Statistics.
+
+**Assumptions taken** (all confirmed or spec-consistent):
+- **A2** A receipt batch is attributed **per receipt**, not per line item — one selector on SUP-01, defaulting to Husband. A receipt belongs to whoever did the shopping.
+- **A3** Colour never stands alone: every person-coloured element also carries the `Husband` / `Wife` text. This is not an extra — `SPEC.md` §6.1 already required it.
+- **A4** Duplicate detection (D4) ignores `person`: the same date/merchant/amount is a duplicate regardless of who recorded it.
+- **A5** The monthly chart stacks rather than grouping — at the 390px reference viewport six months of paired bars are unreadably thin, and stacking preserves each bar's total height. Runner-up (grouped) compares the two people more directly but loses the month total.
+- **A6** `monthlyTotals` keeps its existing six-queries shape and adds `groupBy(person)`, for the smallest diff. Runner-up (one query over the whole window) is faster but rewrites the function.
+- **A7** No index on `person`. A two-person ledger is far too small for the residual filter to matter; an unused index is speculative.
+
+**Deviation from D7/the deck:** the monthly chart's "current month highlighted, earlier months at 25% opacity" treatment is replaced by the two person colours — the bars now carry person meaning, and layering a second encoding on the same marks would read as noise. Recorded here rather than silently changed.
+
+**Migration is additive and preserved every row.** `0001_bouncy_vertigo.sql` is a single `ALTER TABLE expenses ADD person enum('husband','wife') DEFAULT 'husband' NOT NULL` — no DROP/MODIFY/RENAME (checked before applying). Verified against the dev database: 6 rows before, the same 6 rows after with identical ids, merchants, amounts and dates, all defaulted to `husband`.
+
+**Two pre-existing bugs found and fixed along the way** (both independent of this feature, both now covered by a regression test):
+
+1. **A failed save silently cleared the user's chosen Category.** Radix `Select` renders a hidden native `<select>` inside the form whose `defaultValue` is frozen at mount; React resets the form once a `<form action>` settles, which drove that select back to its mount-time value and re-fired `onValueChange`, overwriting the React state. Merchant/amount survived (they re-assert from state), so this had gone unnoticed — it failed the `CLAUDE.md` "does a failed mutation preserve the user's typed input?" check. The new `Entered by` select would have had the identical bug. Fixed by submitting through `onSubmit` + `startTransition(formAction)` instead of the `action` prop, so no reset is triggered. (`onReset` + `preventDefault` was tried first and does not work — React's reset bypasses the cancelable event.)
+
+2. **`tests/e2e/receipt.spec.ts` had a hidden dependency on today's date.** The mock receipt items are hardcoded to `2026-10-31` while Home defaults to `today - 7 .. today`, so the post-save assertion only passed when the suite ran within 8 days of Oct 31 — it had been failing since 2026-11-09, before this work started (confirmed by running the untouched HEAD). The assertion now requests a range containing the items, and additionally asserts the saved rows are attributed to Husband.
+
+**Environment note, not a code defect:** the shell's Node was v22.2.0 while `.nvmrc` pins 24.22.2. `require(ESM)` is only unflagged from Node 22.12+, so on 22.2.0 jsdom's `html-encoding-sniffer` → `@exodus/bytes` chain throws `ERR_REQUIRE_ESM` and **all 16 component test files fail to start** — `npm run verify` is red for a reason that has nothing to do with the code. Running with the pinned Node fixes it with no dependency change. Worth adding an `engines` field to `package.json` to make this fail loudly; not done here as it is outside this request.
+
+**Gate:** `npm run verify` green — typecheck clean, lint clean at `--max-warnings=0`, **40 test files / 256 tests passed** (up from 24/190 reachable). `npm run build` clean. `npm run test:e2e` **50/50 passed**, including the axe accessibility pass. Business logic was written test-first throughout (validation, query filtering, per-person sums, monthly split) — each new assertion was watched fail before the implementation landed. Verified in the running app at 390×844: a wife's expense entered through the UI renders blue with a `Wife` label beside black `Husband` rows, the summary reads `Husband $25.10 · Wife $42.30` against a `$67.40` total (reconciles), the person filter narrows list and total together, and the Statistics chart stacks the two people with a named legend.
+
+---

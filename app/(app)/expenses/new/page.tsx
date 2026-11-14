@@ -24,6 +24,7 @@ export default async function AddExpensePage() {
             merchant: "",
             amountMinor: null,
             notes: "",
+            person: "husband",
           }}
         />
         <ReceiptPicker categories={categories} />
