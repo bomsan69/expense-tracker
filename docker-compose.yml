@@ -59,7 +59,9 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/login"]
+      # 127.0.0.1, not localhost: busybox wget resolves localhost to ::1 first,
+      # and the server binds IPv4 only, so the v6 attempt is refused.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
       interval: 5s
       timeout: 5s
       retries: 10

@@ -19,6 +19,8 @@
 - 11/10 로그에 "원인 미상, 범위 밖"으로 남겨뒀던 건. 컨테이너 내부에서 `netstat`로 확인한 결과 `LISTEN 172.18.0.3:3000` — **컨테이너 IP에만 바인딩**되어 루프백이 닫혀 있었음. 그래서 헬스체크의 `wget http://localhost:3000`이 Connection refused (localhost·127.0.0.1 둘 다 실패, IPv6 문제 아님). 외부 포트 매핑은 컨테이너 IP로 가므로 서비스 자체는 정상이었던 것
 - 원인: Next.js standalone `server.js`가 `HOSTNAME` 환경변수를 바인딩 주소로 사용하는데, **Docker가 이 변수를 컨테이너 ID로 자동 설정**(`HOSTNAME=b471e61e253d`)하여 해당 호스트명이 가리키는 컨테이너 IP에만 묶임
 - `docker-compose.yml` — `app` 서비스 환경변수에 `HOSTNAME: "0.0.0.0"` 추가. `docker compose config`로 반영 확인
+- **원인이 한 겹 더 있었음**: 바인딩을 고친 뒤 재배포했는데도 여전히 unhealthy — 컨테이너 내부에서 `127.0.0.1`은 성공(exit=0)인데 `localhost`만 실패(exit=1). busybox `wget`이 `localhost`를 IPv6 `::1`로 먼저 해석하는데 서버는 IPv4 `0.0.0.0`에만 바인딩되어 거부됨. 처음에 둘 다 실패했던 것은 컨테이너 IP 전용 바인딩이 IPv6 문제를 가리고 있었기 때문
+- `docker-compose.yml` — healthcheck URL을 `http://localhost:3000/login` → `http://127.0.0.1:3000/login`로 변경. 두 수정(바인딩 + 주소)이 모두 있어야 통과함
 - `npm run verify` 통과 (40파일 256 tests)
 
 ## 2026-11-14
