@@ -25,6 +25,14 @@
   --ring: #2563eb;
   --destructive: #b91c1c;
   --destructive-background: #fef2f2;
+  /* Who entered an expense (SPEC.md D11). Wife is deliberately darker than
+     --accent: accent means "interactive", so reusing it would read as a link.
+     6.3:1 on white, AA at body size. */
+  --person-husband: #111827;
+  --person-wife: #1d4ed8;
+  /* The dark summary card inverts these: #1d4ed8 on --primary is ~1.5:1.
+     8.15:1 on #1F2937, and husband simply uses --primary-foreground. */
+  --person-wife-on-primary: #93c5fd;
   --radius: 0.625rem;
 }
 @theme inline {
@@ -49,6 +57,9 @@
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
   --color-destructive-background: var(--destructive-background);
+  --color-person-husband: var(--person-husband);
+  --color-person-wife: var(--person-wife);
+  --color-person-wife-on-primary: var(--person-wife-on-primary);
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;

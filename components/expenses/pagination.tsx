@@ -8,6 +8,7 @@ interface PaginationProps {
   from: string;
   to: string;
   category: string;
+  person: string;
 }
 
 export function Pagination({
@@ -17,6 +18,7 @@ export function Pagination({
   from,
   to,
   category,
+  person,
 }: PaginationProps) {
   if (totalPages <= 1) {
     return null;
@@ -27,6 +29,7 @@ export function Pagination({
       from,
       to,
       category,
+      person,
       page: String(target),
     });
     return `${basePath}?${params.toString()}`;

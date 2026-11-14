@@ -12,6 +12,7 @@ describe("Pagination", () => {
         from="2026-10-25"
         to="2026-11-01"
         category="all"
+        person="all"
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -26,6 +27,7 @@ describe("Pagination", () => {
         from="2026-10-25"
         to="2026-11-01"
         category="all"
+        person="all"
       />,
     );
     expect(screen.getByRole("link", { name: "1" })).toHaveAttribute(
@@ -51,10 +53,12 @@ describe("Pagination", () => {
         from="2026-10-25"
         to="2026-11-01"
         category="4"
+        person="wife"
       />,
     );
     const link = screen.getByRole("link", { name: "3" });
     expect(link.getAttribute("href")).toContain("category=4");
+    expect(link.getAttribute("href")).toContain("person=wife");
     expect(link.getAttribute("href")).toContain("page=3");
   });
 });

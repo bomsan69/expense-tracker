@@ -70,12 +70,14 @@ describe("getHomeData", () => {
       categoryId: foodId,
       merchant: "Groceries",
       amountMinor: 1000,
+      person: "husband",
     });
     await createExpense(userId, {
       spentOn: today,
       categoryId: travelId,
       merchant: "Flight",
       amountMinor: 5000,
+      person: "husband",
     });
 
     const result = await getHomeData({
@@ -98,6 +100,7 @@ describe("getHomeData", () => {
       categoryId: foodId,
       merchant: "Groceries",
       amountMinor: 1000,
+      person: "husband",
     });
     const result = await getHomeData({
       from: today,
@@ -129,6 +132,7 @@ describe("getHomeData", () => {
         categoryId: foodId,
         merchant: `M${i}`,
         amountMinor: 100,
+        person: "husband",
       });
     }
     const result = await getHomeData({

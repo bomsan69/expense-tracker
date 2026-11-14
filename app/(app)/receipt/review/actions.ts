@@ -15,6 +15,7 @@ export interface ReceiptRowInput {
   merchant: string;
   amountMinor: string;
   notes?: string;
+  person?: string;
 }
 
 export type SaveBatchResult =

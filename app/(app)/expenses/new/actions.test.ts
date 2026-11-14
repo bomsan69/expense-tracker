@@ -92,6 +92,7 @@ describe("createExpenseAction", () => {
           categoryId: String(categoryId),
           merchant: "Trader Joe's",
           amountMinor: "42.10",
+          person: "husband",
         }),
       ),
     ).rejects.toThrow("/");
@@ -107,6 +108,7 @@ describe("createExpenseAction", () => {
         categoryId: String(categoryId),
         merchant: "Trader Joe's",
         amountMinor: "0",
+        person: "husband",
       }),
     );
     expect(result).toEqual({
@@ -126,6 +128,7 @@ describe("createExpenseAction", () => {
           categoryId: String(categoryId),
           merchant: "X",
           amountMinor: "1.00",
+          person: "husband",
         }),
       ),
     ).rejects.toThrow("/login");
@@ -173,6 +176,7 @@ describe("parseReceiptAction", () => {
       categoryId,
       merchant: "Trader Joe's",
       amountMinor: 1299,
+      person: "husband",
     });
 
     mockCreate.mockResolvedValue(

@@ -46,6 +46,7 @@ export function ReceiptPicker({ categories }: ReceiptPickerProps) {
         ...item,
         categoryId: defaultCategoryId,
       })),
+      person: "husband",
     };
     try {
       sessionStorage.setItem(RECEIPT_DRAFT_KEY, JSON.stringify(draft));

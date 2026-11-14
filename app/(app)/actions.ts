@@ -5,11 +5,18 @@ import { defaultDateRange } from "@/lib/dates";
 import { type Category, listCategories } from "@/lib/queries/categories";
 import {
   type Expense,
+  type PersonTotals,
   countExpenses,
   listExpenses,
   sumExpenses,
+  sumExpensesByPerson,
 } from "@/lib/queries/expenses";
-import { dateRangeSchema, pageSchema } from "@/lib/validation/expense";
+import {
+  dateRangeSchema,
+  pageSchema,
+  personFilterSchema,
+  type PersonFilter,
+} from "@/lib/validation/expense";
 
 const PAGE_SIZE = 10;
 
@@ -17,6 +24,7 @@ export interface HomeDataParams {
   from?: string;
   to?: string;
   category?: string;
+  person?: string;
   page?: string;
 }
 
@@ -28,6 +36,8 @@ export interface HomeData {
   from: string;
   to: string;
   categoryId: number | null;
+  person: PersonFilter;
+  personTotals: PersonTotals;
   categories: Category[];
 }
 
@@ -65,10 +75,13 @@ export async function getHomeData(
     }
   }
 
+  const person = personFilterSchema.parse(params.person);
+
   const filter = {
     from: rangeResult.data.from,
     to: rangeResult.data.to,
     ...(categoryId !== null ? { categoryId } : {}),
+    ...(person !== "all" ? { person } : {}),
   };
 
   const totalCount = await countExpenses(session.userId, filter);
@@ -76,9 +89,12 @@ export async function getHomeData(
   const requestedPage = pageSchema.parse(params.page ?? "1");
   const page = Math.min(requestedPage, totalPages);
 
-  const [items, totalMinor] = await Promise.all([
+  const [items, totalMinor, personTotals] = await Promise.all([
     listExpenses(session.userId, filter, page),
     sumExpenses(session.userId, filter),
+    // Split over the identical condition, so the two halves always
+    // reconcile against the total beside them (D11).
+    sumExpensesByPerson(session.userId, filter),
   ]);
 
   return {
@@ -91,6 +107,8 @@ export async function getHomeData(
       from: filter.from,
       to: filter.to,
       categoryId,
+      person,
+      personTotals,
       categories,
     },
   };

@@ -38,12 +38,26 @@ export const notesSchema = z
   .max(500, { message: "Notes must be 500 characters or fewer." })
   .optional();
 
+export const personSchema = z
+  .enum(["husband", "wife"], { message: "Select who entered this." })
+  .default("husband");
+
+export type Person = z.infer<typeof personSchema>;
+
+/** The list filter's extra "all" option, which is not a storable `person`. */
+export const personFilterSchema = z
+  .enum(["all", "husband", "wife"])
+  .catch("all");
+
+export type PersonFilter = z.infer<typeof personFilterSchema>;
+
 export const expenseInputSchema = z.object({
   spentOn: spentOnSchema,
   categoryId: categoryIdSchema,
   merchant: merchantSchema,
   amountMinor: amountSchema,
   notes: notesSchema,
+  person: personSchema,
 });
 
 export type ExpenseInput = z.infer<typeof expenseInputSchema>;

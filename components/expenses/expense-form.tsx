@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { FormField } from "@/components/forms/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,9 @@ import {
 } from "@/components/ui/select";
 import type { ActionResult } from "@/lib/action-result";
 import { minorToInputValue } from "@/lib/money";
+import { PERSON_LABELS, PERSON_OPTIONS } from "@/lib/person";
 import type { Category } from "@/lib/queries/categories";
+import type { Person } from "@/lib/validation/expense";
 
 export interface ExpenseFormValues {
   spentOn: string;
@@ -21,6 +23,7 @@ export interface ExpenseFormValues {
   merchant: string;
   amountMinor: number | null;
   notes: string;
+  person: Person;
 }
 
 // Generic over the action's success payload (undefined for create, Expense
@@ -68,6 +71,7 @@ export function ExpenseForm<T>({
       : "",
   );
   const [notes, setNotes] = useState(defaultValues.notes);
+  const [person, setPerson] = useState<Person>(defaultValues.person);
 
   function markDirty() {
     setIsDirty(true);
@@ -75,7 +79,19 @@ export function ExpenseForm<T>({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    // Submitting through onSubmit rather than the `action` prop: React resets
+    // the form once an `action` settles, which drives the native <select>
+    // Radix renders inside a form back to its mount-time default and re-fires
+    // onValueChange, silently clearing Category and Entered by on a failed
+    // save. Owning the submit keeps every field as the user left it.
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => formAction(formData));
+      }}
+      className="flex flex-col gap-4"
+    >
       {id !== undefined && <input type="hidden" name="id" value={id} />}
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -149,6 +165,28 @@ export function ExpenseForm<T>({
             markDirty();
           }}
         />
+      </FormField>
+
+      <FormField id="person" label="Entered by" required>
+        <Select
+          value={person}
+          onValueChange={(value) => {
+            setPerson(value as Person);
+            markDirty();
+          }}
+        >
+          <SelectTrigger id="person" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PERSON_OPTIONS.map((option) => (
+              <SelectItem key={option} value={option}>
+                {PERSON_LABELS[option]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <input type="hidden" name="person" value={person} />
       </FormField>
 
       <FormField id="notes" label="Notes (optional)">

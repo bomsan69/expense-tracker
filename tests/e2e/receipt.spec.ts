@@ -58,7 +58,15 @@ test.describe("receipt import", () => {
 
     await page.getByRole("button", { name: "Confirm & Save All" }).click();
     await page.waitForURL("/");
-    await expect(page.getByText(/Milk|Bread/)).toBeVisible();
+    // The mock items are dated 2026-10-31, which the default 8-day range
+    // (today - 7) only covers for a few days; ask for a range that contains
+    // them so this assertion does not depend on the day it runs.
+    await page.goto("/?from=2026-10-01&to=2026-11-30&category=all&person=all");
+    await settle(page);
+    const saved = page.getByRole("listitem").filter({ hasText: /Milk|Bread/ });
+    await expect(saved).toHaveCount(1);
+    // Saved under the receipt's chosen person, which defaults to Husband (D11).
+    await expect(saved).toContainText("Husband");
   });
 
   test("Cancel writes nothing and returns to Add Expense", async ({

@@ -7,6 +7,8 @@ import {
   merchantSchema,
   notesSchema,
   pageSchema,
+  personFilterSchema,
+  personSchema,
   spentOnSchema,
 } from "./expense";
 
@@ -96,6 +98,44 @@ describe("notesSchema", () => {
   });
 });
 
+describe("personSchema", () => {
+  it("accepts both household members", () => {
+    expect(personSchema.safeParse("husband")).toEqual(
+      expect.objectContaining({ success: true, data: "husband" }),
+    );
+    expect(personSchema.safeParse("wife")).toEqual(
+      expect.objectContaining({ success: true, data: "wife" }),
+    );
+  });
+
+  it("defaults to husband when the field is absent (D11)", () => {
+    expect(personSchema.safeParse(undefined)).toEqual(
+      expect.objectContaining({ success: true, data: "husband" }),
+    );
+  });
+
+  it("rejects any other value", () => {
+    const result = personSchema.safeParse("roommate");
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("Select who entered this.");
+    }
+  });
+});
+
+describe("personFilterSchema", () => {
+  it("accepts all, husband, and wife", () => {
+    for (const value of ["all", "husband", "wife"]) {
+      expect(personFilterSchema.parse(value)).toBe(value);
+    }
+  });
+
+  it("falls back to all for an unknown or missing value", () => {
+    expect(personFilterSchema.parse("nobody")).toBe("all");
+    expect(personFilterSchema.parse(undefined)).toBe("all");
+  });
+});
+
 describe("expenseInputSchema", () => {
   it("accepts a fully valid expense", () => {
     const result = expenseInputSchema.safeParse({
@@ -104,8 +144,40 @@ describe("expenseInputSchema", () => {
       merchant: "Trader Joe's",
       amountMinor: "42.10",
       notes: "weekly groceries",
+      person: "wife",
     });
-    expect(result.success).toBe(true);
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ person: "wife" }),
+      }),
+    );
+  });
+
+  it("defaults person to husband when the form omits it (D11)", () => {
+    const result = expenseInputSchema.safeParse({
+      spentOn: "2026-10-31",
+      categoryId: "2",
+      merchant: "Trader Joe's",
+      amountMinor: "42.10",
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ person: "husband" }),
+      }),
+    );
+  });
+
+  it("rejects an unknown person", () => {
+    const result = expenseInputSchema.safeParse({
+      spentOn: "2026-10-31",
+      categoryId: "2",
+      merchant: "Trader Joe's",
+      amountMinor: "42.10",
+      person: "roommate",
+    });
+    expect(result.success).toBe(false);
   });
 });
 

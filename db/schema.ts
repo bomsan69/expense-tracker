@@ -4,6 +4,7 @@ import {
   date,
   index,
   int,
+  mysqlEnum,
   mysqlTable,
   text,
   timestamp,
@@ -66,6 +67,9 @@ export const expenses = mysqlTable(
     merchant: varchar("merchant", { length: 160 }).notNull(),
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
     notes: varchar("notes", { length: 500 }),
+    person: mysqlEnum("person", ["husband", "wife"])
+      .notNull()
+      .default("husband"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },

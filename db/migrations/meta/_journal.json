@@ -8,6 +8,13 @@
       "when": 1793647389829,
       "tag": "0000_bored_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1794667113392,
+      "tag": "0001_bouncy_vertigo",
+      "breakpoints": true
     }
   ]
 }

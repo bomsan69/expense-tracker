@@ -9,6 +9,7 @@ import {
   getExpenseById,
   listExpenses,
   sumExpenses,
+  sumExpensesByPerson,
   updateExpense,
 } from "./expenses";
 import { createTestUser, deleteTestUser } from "./test-helpers";
@@ -39,11 +40,25 @@ describe("createExpense", () => {
       merchant: "Trader Joe's",
       amountMinor: 4210,
       notes: "weekly groceries",
+      person: "husband",
     });
     expect(expense.userId).toBe(userId);
     expect(expense.categoryId).toBe(categoryId);
     expect(expense.amountMinor).toBe(4210);
     expect(expense.notes).toBe("weekly groceries");
+    expect(expense.person).toBe("husband");
+  });
+
+  it("persists the entering person (D11)", async () => {
+    const expense = await createExpense(userId, {
+      spentOn: todayIso(),
+      categoryId,
+      merchant: "Whole Foods",
+      amountMinor: 3300,
+      person: "wife",
+    });
+    expect(expense.person).toBe("wife");
+    expect((await getExpenseById(userId, expense.id))?.person).toBe("wife");
   });
 
   it("rejects a category that does not belong to the user", async () => {
@@ -56,6 +71,7 @@ describe("createExpense", () => {
         categoryId: otherUserCategory.category.id,
         merchant: "Shop",
         amountMinor: 100,
+        person: "husband",
       }),
     ).rejects.toThrow();
     await deleteTestUser(otherUser.id);
@@ -72,6 +88,7 @@ describe("listExpenses / countExpenses / sumExpenses", () => {
         categoryId,
         merchant: `Merchant ${i}`,
         amountMinor: 100 + i,
+        person: "husband",
       });
     }
     // One outside the range and one in a different category: must be excluded.
@@ -80,12 +97,14 @@ describe("listExpenses / countExpenses / sumExpenses", () => {
       categoryId,
       merchant: "Too old",
       amountMinor: 999,
+      person: "husband",
     });
     await createExpense(userId, {
       spentOn: today,
       categoryId: otherCategoryId,
       merchant: "Wrong category",
       amountMinor: 999,
+      person: "husband",
     });
 
     const filter = { from: addDays(today, -14), to: today, categoryId };
@@ -117,6 +136,77 @@ describe("listExpenses / countExpenses / sumExpenses", () => {
   });
 });
 
+describe("person filtering (D11)", () => {
+  // Hand-computed: husband 100 + 250 = 350, wife 400, grand total 750.
+  beforeEach(async () => {
+    const today = todayIso();
+    await createExpense(userId, {
+      spentOn: today,
+      categoryId,
+      merchant: "His coffee",
+      amountMinor: 100,
+      person: "husband",
+    });
+    await createExpense(userId, {
+      spentOn: today,
+      categoryId,
+      merchant: "His lunch",
+      amountMinor: 250,
+      person: "husband",
+    });
+    await createExpense(userId, {
+      spentOn: today,
+      categoryId,
+      merchant: "Her books",
+      amountMinor: 400,
+      person: "wife",
+    });
+  });
+
+  it("narrows the list, the count, and the total to one person together", async () => {
+    const today = todayIso();
+    const range = { from: today, to: today };
+
+    expect(await countExpenses(userId, { ...range, person: "husband" })).toBe(2);
+    expect(await sumExpenses(userId, { ...range, person: "husband" })).toBe(350);
+
+    expect(await countExpenses(userId, { ...range, person: "wife" })).toBe(1);
+    expect(await sumExpenses(userId, { ...range, person: "wife" })).toBe(400);
+
+    const herRows = await listExpenses(
+      userId,
+      { ...range, person: "wife" },
+      1,
+    );
+    expect(herRows).toHaveLength(1);
+    expect(herRows[0]?.merchant).toBe("Her books");
+  });
+
+  it("omitting person covers the whole household", async () => {
+    const today = todayIso();
+    const range = { from: today, to: today };
+    expect(await countExpenses(userId, range)).toBe(3);
+    expect(await sumExpenses(userId, range)).toBe(750);
+  });
+
+  it("splits the total per person over the same filter", async () => {
+    const today = todayIso();
+    expect(await sumExpensesByPerson(userId, { from: today, to: today })).toEqual(
+      { husbandMinor: 350, wifeMinor: 400 },
+    );
+  });
+
+  it("reports zero for a person with no rows in range", async () => {
+    const today = todayIso();
+    expect(
+      await sumExpensesByPerson(userId, {
+        from: addDays(today, -30),
+        to: addDays(today, -20),
+      }),
+    ).toEqual({ husbandMinor: 0, wifeMinor: 0 });
+  });
+});
+
 describe("updateExpense", () => {
   it("updates the row and preserves the id", async () => {
     const expense = await createExpense(userId, {
@@ -124,17 +214,37 @@ describe("updateExpense", () => {
       categoryId,
       merchant: "Original",
       amountMinor: 1000,
+      person: "husband",
     });
     const updated = await updateExpense(userId, expense.id, {
       spentOn: todayIso(),
       categoryId: otherCategoryId,
       merchant: "Updated",
       amountMinor: 2000,
+      person: "husband",
     });
     expect(updated?.id).toBe(expense.id);
     expect(updated?.merchant).toBe("Updated");
     expect(updated?.categoryId).toBe(otherCategoryId);
     expect(updated?.amountMinor).toBe(2000);
+  });
+
+  it("reassigns the entering person (D11)", async () => {
+    const expense = await createExpense(userId, {
+      spentOn: todayIso(),
+      categoryId,
+      merchant: "Original",
+      amountMinor: 1000,
+      person: "husband",
+    });
+    const updated = await updateExpense(userId, expense.id, {
+      spentOn: expense.spentOn,
+      categoryId: expense.categoryId,
+      merchant: expense.merchant,
+      amountMinor: expense.amountMinor,
+      person: "wife",
+    });
+    expect(updated?.person).toBe("wife");
   });
 
   it("returns null and performs no update for a nonexistent id", async () => {
@@ -143,6 +253,7 @@ describe("updateExpense", () => {
       categoryId,
       merchant: "Nope",
       amountMinor: 100,
+      person: "husband",
     });
     expect(result).toBeNull();
   });
@@ -153,12 +264,14 @@ describe("updateExpense", () => {
       categoryId,
       merchant: "Same",
       amountMinor: 500,
+      person: "husband",
     });
     const resaved = await updateExpense(userId, expense.id, {
       spentOn: expense.spentOn,
       categoryId: expense.categoryId,
       merchant: expense.merchant,
       amountMinor: expense.amountMinor,
+      person: "husband",
     });
     expect(resaved?.id).toBe(expense.id);
   });
@@ -171,6 +284,7 @@ describe("deleteExpense", () => {
       categoryId,
       merchant: "To delete",
       amountMinor: 100,
+      person: "husband",
     });
     expect(await deleteExpense(userId, expense.id)).toBe(true);
     expect(await getExpenseById(userId, expense.id)).toBeNull();
@@ -185,11 +299,16 @@ describe("createManyExpenses", () => {
   it("writes every row atomically", async () => {
     const today = todayIso();
     const created = await createManyExpenses(userId, [
-      { spentOn: today, categoryId, merchant: "A", amountMinor: 100 },
-      { spentOn: today, categoryId, merchant: "B", amountMinor: 200 },
-      { spentOn: today, categoryId, merchant: "C", amountMinor: 300 },
+      { spentOn: today, categoryId, merchant: "A", amountMinor: 100, person: "husband" },
+      { spentOn: today, categoryId, merchant: "B", amountMinor: 200, person: "husband" },
+      { spentOn: today, categoryId, merchant: "C", amountMinor: 300, person: "wife" },
     ]);
     expect(created).toHaveLength(3);
+    expect(created.map((row) => row.person)).toEqual([
+      "husband",
+      "husband",
+      "wife",
+    ]);
     const total = await countExpenses(userId, { from: today, to: today });
     expect(total).toBe(3);
   });
@@ -202,12 +321,13 @@ describe("createManyExpenses", () => {
 
     await expect(
       createManyExpenses(userId, [
-        { spentOn: today, categoryId, merchant: "Valid", amountMinor: 100 },
+        { spentOn: today, categoryId, merchant: "Valid", amountMinor: 100, person: "husband" },
         {
           spentOn: today,
           categoryId: otherCategory.category.id,
           merchant: "Invalid",
           amountMinor: 200,
+          person: "husband",
         },
       ]),
     ).rejects.toThrow();

@@ -1,0 +1,1 @@
+ALTER TABLE `expenses` ADD `person` enum('husband','wife') DEFAULT 'husband' NOT NULL;

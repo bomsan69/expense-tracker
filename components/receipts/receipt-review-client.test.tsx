@@ -25,6 +25,7 @@ const draft = {
     { spentOn: "2026-11-01", categoryId: 1, merchant: "Milk", amountMinor: 499, isDuplicate: false },
     { spentOn: "2026-11-01", categoryId: 1, merchant: "Bread", amountMinor: 349, isDuplicate: true },
   ],
+  person: "husband" as const,
 };
 
 beforeEach(() => {
@@ -64,6 +65,7 @@ describe("ReceiptReviewClient", () => {
       JSON.stringify({
         filename: "r.jpg",
         items: [draft.items[0]],
+        person: "husband",
       }),
     );
     const user = userEvent.setup();
@@ -97,7 +99,46 @@ describe("ReceiptReviewClient", () => {
       categoryId: "1",
       merchant: "Milk",
       amountMinor: "4.99",
+      person: "husband",
     });
+  });
+
+  it("defaults the receipt to Husband and applies a switch to every row (D11)", async () => {
+    sessionStorage.setItem("receipt_draft", JSON.stringify(draft));
+    mockSaveBatch.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<ReceiptReviewClient categories={categories} />);
+
+    await screen.findByText("Milk");
+    expect(screen.getByLabelText(/^Entered by/)).toHaveTextContent("Husband");
+
+    await user.click(screen.getByLabelText(/^Entered by/));
+    await user.click(await screen.findByRole("option", { name: "Wife" }));
+    await user.click(screen.getByRole("button", { name: "Confirm & Save All" }));
+
+    await waitFor(() => expect(mockSaveBatch).toHaveBeenCalled());
+    const [rows] = mockSaveBatch.mock.calls[0] as [{ person: string }[]];
+    expect(rows.map((row) => row.person)).toEqual(["wife", "wife"]);
+  });
+
+  it("keeps the chosen person after a failed batch save", async () => {
+    sessionStorage.setItem("receipt_draft", JSON.stringify(draft));
+    mockSaveBatch.mockResolvedValue({
+      ok: false,
+      error: "Nothing was saved. Fix the highlighted rows and try again.",
+    });
+    const user = userEvent.setup();
+    render(<ReceiptReviewClient categories={categories} />);
+
+    await screen.findByText("Milk");
+    await user.click(screen.getByLabelText(/^Entered by/));
+    await user.click(await screen.findByRole("option", { name: "Wife" }));
+    await user.click(screen.getByRole("button", { name: "Confirm & Save All" }));
+
+    await screen.findByText(
+      "Nothing was saved. Fix the highlighted rows and try again.",
+    );
+    expect(screen.getByLabelText(/^Entered by/)).toHaveTextContent("Wife");
   });
 
   it("on batch failure, shows the error, names the row, and preserves all edits", async () => {

@@ -28,6 +28,7 @@ const emptyDefaults = {
   merchant: "",
   amountMinor: null,
   notes: "",
+  person: "husband" as const,
 };
 
 describe("ExpenseForm", () => {
@@ -46,6 +47,7 @@ describe("ExpenseForm", () => {
     expect(screen.getByLabelText(/^Merchant/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Amount/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Notes/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Entered by/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Save Expense" }),
     ).toBeInTheDocument();
@@ -64,12 +66,14 @@ describe("ExpenseForm", () => {
           merchant: "Uber",
           amountMinor: 1940,
           notes: "ride",
+          person: "wife",
         }}
       />,
     );
     expect(screen.getByLabelText(/^Merchant/)).toHaveValue("Uber");
     expect(screen.getByLabelText(/^Amount/)).toHaveValue("19.40");
     expect(screen.getByLabelText(/^Notes/)).toHaveValue("ride");
+    expect(screen.getByLabelText(/^Entered by/)).toHaveTextContent("Wife");
   });
 
   it("submits the typed values via FormData", async () => {
@@ -95,6 +99,83 @@ describe("ExpenseForm", () => {
     expect(formData.get("merchant")).toBe("Trader Joe's");
     expect(formData.get("amountMinor")).toBe("42.10");
     expect(formData.get("categoryId")).toBe("1");
+    expect(formData.get("person")).toBe("husband");
+  });
+
+  it("defaults the entering person to Husband and can switch to Wife (D11)", async () => {
+    const action = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <ExpenseForm
+        action={action}
+        categories={categories}
+        defaultValues={emptyDefaults}
+        submitLabel="Save Expense"
+      />,
+    );
+
+    expect(screen.getByLabelText(/^Entered by/)).toHaveTextContent("Husband");
+
+    await user.click(screen.getByLabelText(/^Entered by/));
+    await user.click(await screen.findByRole("option", { name: "Wife" }));
+    await user.click(screen.getByLabelText(/^Category/));
+    await user.click(await screen.findByRole("option", { name: "Food" }));
+    await user.type(screen.getByLabelText(/^Merchant/), "Whole Foods");
+    await user.type(screen.getByLabelText(/^Amount/), "12.00");
+    await user.click(screen.getByRole("button", { name: "Save Expense" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const [, formData] = action.mock.calls[0] as [unknown, FormData];
+    expect(formData.get("person")).toBe("wife");
+  });
+
+  it("keeps the chosen person when the action fails", async () => {
+    const action = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Enter an amount greater than 0." });
+    const user = userEvent.setup();
+    render(
+      <ExpenseForm
+        action={action}
+        categories={categories}
+        defaultValues={emptyDefaults}
+        submitLabel="Save Expense"
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/^Entered by/));
+    await user.click(await screen.findByRole("option", { name: "Wife" }));
+    await user.type(screen.getByLabelText(/^Merchant/), "Whole Foods");
+    await user.type(screen.getByLabelText(/^Amount/), "0");
+    await user.click(screen.getByRole("button", { name: "Save Expense" }));
+
+    await screen.findByText("Enter an amount greater than 0.");
+    expect(screen.getByLabelText(/^Entered by/)).toHaveTextContent("Wife");
+    expect(screen.getByLabelText(/^Merchant/)).toHaveValue("Whole Foods");
+  });
+
+  it("keeps the chosen category when the action fails", async () => {
+    const action = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "Enter an amount greater than 0." });
+    const user = userEvent.setup();
+    render(
+      <ExpenseForm
+        action={action}
+        categories={categories}
+        defaultValues={emptyDefaults}
+        submitLabel="Save Expense"
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/^Category/));
+    await user.click(await screen.findByRole("option", { name: "Travel" }));
+    await user.type(screen.getByLabelText(/^Merchant/), "Uber");
+    await user.type(screen.getByLabelText(/^Amount/), "0");
+    await user.click(screen.getByRole("button", { name: "Save Expense" }));
+
+    await screen.findByText("Enter an amount greater than 0.");
+    expect(screen.getByLabelText(/^Category/)).toHaveTextContent("Travel");
   });
 
   it("preserves typed input when the action fails", async () => {

@@ -5,9 +5,19 @@ import { useRouter } from "next/navigation";
 import { saveBatchAction } from "@/app/(app)/receipt/review/actions";
 import { ReceiptRow } from "@/components/receipts/receipt-row";
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/forms/form-field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatMoney, minorToInputValue } from "@/lib/money";
+import { PERSON_LABELS, PERSON_OPTIONS } from "@/lib/person";
 import type { Category } from "@/lib/queries/categories";
 import { RECEIPT_DRAFT_KEY, type ReceiptDraftItem } from "@/lib/receipt-draft";
+import type { Person } from "@/lib/validation/expense";
 
 interface ReceiptReviewClientProps {
   categories: Category[];
@@ -24,7 +34,12 @@ function clearDraft() {
 type LoadedDraft =
   | { status: "loading" }
   | { status: "missing" }
-  | { status: "ready"; filename: string; items: ReceiptDraftItem[] };
+  | {
+      status: "ready";
+      filename: string;
+      items: ReceiptDraftItem[];
+      person: Person;
+    };
 
 // sessionStorage only exists client-side (D10), so it can only be read
 // inside an effect — never during the initial (possibly server) render.
@@ -37,8 +52,14 @@ function readDraft(): LoadedDraft {
     const parsed = JSON.parse(raw) as {
       filename: string;
       items: ReceiptDraftItem[];
+      person: Person;
     };
-    return { status: "ready", filename: parsed.filename, items: parsed.items };
+    return {
+      status: "ready",
+      filename: parsed.filename,
+      items: parsed.items,
+      person: parsed.person,
+    };
   } catch {
     return { status: "missing" };
   }
@@ -49,6 +70,7 @@ export function ReceiptReviewClient({ categories }: ReceiptReviewClientProps) {
   const [isPending, startTransition] = useTransition();
   const [draft, setDraft] = useState<LoadedDraft>({ status: "loading" });
   const [items, setItems] = useState<ReceiptDraftItem[]>([]);
+  const [person, setPerson] = useState<Person>("husband");
   const [rowErrors, setRowErrors] = useState<(string | null)[] | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -62,6 +84,7 @@ export function ReceiptReviewClient({ categories }: ReceiptReviewClientProps) {
     setDraft(loaded);
     if (loaded.status === "ready") {
       setItems(loaded.items);
+      setPerson(loaded.person);
     }
   }, []);
 
@@ -87,6 +110,7 @@ export function ReceiptReviewClient({ categories }: ReceiptReviewClientProps) {
         categoryId: item.categoryId !== null ? String(item.categoryId) : "",
         merchant: item.merchant,
         amountMinor: minorToInputValue(item.amountMinor),
+        person,
       }));
       const result = await saveBatchAction(rows);
       // On success the action redirects server-side and never returns here.
@@ -113,6 +137,23 @@ export function ReceiptReviewClient({ categories }: ReceiptReviewClientProps) {
       <h2 className="mt-4 text-lg font-semibold text-foreground">
         Review expenses before saving
       </h2>
+
+      <div className="mt-3">
+        <FormField id="person" label="Entered by" required>
+          <Select value={person} onValueChange={(value) => setPerson(value as Person)}>
+            <SelectTrigger id="person" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERSON_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {PERSON_LABELS[option]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+      </div>
 
       {formError && (
         <p role="alert" className="mt-2 text-sm text-destructive">
